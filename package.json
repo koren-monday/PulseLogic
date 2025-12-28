@@ -1,0 +1,29 @@
+{
+  "name": "garmin-insights-engine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Analyze Garmin health data using various LLMs",
+  "workspaces": {
+    "packages": [
+      "server",
+      "client"
+    ],
+    "nohoist": [
+      "**/vite",
+      "**/vite/**"
+    ]
+  },
+  "scripts": {
+    "dev": "concurrently \"yarn dev:server\" \"yarn dev:client\"",
+    "dev:server": "yarn workspace garmin-insights-server dev",
+    "dev:client": "yarn workspace client dev",
+    "build": "yarn workspace garmin-insights-server build && yarn workspace client build",
+    "build:server": "yarn workspace garmin-insights-server build",
+    "build:client": "yarn workspace client build",
+    "typecheck": "yarn workspace garmin-insights-server typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "packageManager": "yarn@1.22.22"
+}
