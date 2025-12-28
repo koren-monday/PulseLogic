@@ -102,6 +102,27 @@ export interface AnalysisResponse {
   tokensUsed?: number;
 }
 
+// Chat message for conversation continuation
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatRequest {
+  provider: LLMProvider;
+  apiKey: string;
+  healthData: GarminHealthData;
+  model?: string;
+  messages: ChatMessage[];
+}
+
+export interface ChatResponse {
+  provider: LLMProvider;
+  model: string;
+  message: string;
+  tokensUsed?: number;
+}
+
 // ============================================================================
 // Zod Validation Schemas
 // ============================================================================
@@ -130,7 +151,30 @@ export const AnalyzeRequestSchema = z.object({
 });
 
 export const FetchDataRequestSchema = z.object({
-  days: z.number().min(1).max(30).default(7),
+  days: z.number().min(1).max(180).default(7),
+});
+
+export const ChatMessageSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  content: z.string().min(1),
+});
+
+export const ChatRequestSchema = z.object({
+  provider: z.enum(['openai', 'anthropic', 'google']),
+  apiKey: z.string().min(1, 'API key required'),
+  healthData: z.object({
+    dateRange: z.object({
+      start: z.string(),
+      end: z.string(),
+    }),
+    sleep: z.array(z.any()),
+    stress: z.array(z.any()),
+    bodyBattery: z.array(z.any()),
+    activities: z.array(z.any()),
+    heartRate: z.array(z.any()),
+  }),
+  model: z.string().optional(),
+  messages: z.array(ChatMessageSchema).min(1, 'At least one message required'),
 });
 
 // ============================================================================

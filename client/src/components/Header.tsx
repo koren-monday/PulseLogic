@@ -1,13 +1,55 @@
-import { Activity } from 'lucide-react';
+import { Activity, Settings, LogOut, User } from 'lucide-react';
 
-export function Header() {
+interface HeaderProps {
+  displayName?: string;
+  onSettingsClick?: () => void;
+  onLogout?: () => void;
+}
+
+export function Header({ displayName, onSettingsClick, onLogout }: HeaderProps) {
+  const isLoggedIn = !!displayName;
+
   return (
-    <header className="flex items-center justify-center gap-3 py-8">
-      <Activity className="w-10 h-10 text-garmin-blue" />
-      <div>
-        <h1 className="text-2xl font-bold text-white">Garmin Insights Engine</h1>
-        <p className="text-slate-400 text-sm">AI-Powered Health Data Analysis</p>
+    <header className="flex items-center justify-between py-6">
+      <div className="flex items-center gap-3">
+        <Activity className="w-8 h-8 text-garmin-blue" />
+        <div>
+          <h1 className="text-xl font-bold text-white">Garmin Insights Engine</h1>
+          <p className="text-slate-400 text-xs">AI-Powered Health Analysis</p>
+        </div>
       </div>
+
+      {isLoggedIn && (
+        <div className="flex items-center gap-3">
+          {/* User Info */}
+          <div className="flex items-center gap-2 text-slate-400">
+            <User className="w-4 h-4" />
+            <span className="text-sm hidden sm:inline">{displayName}</span>
+          </div>
+
+          {/* Settings Button */}
+          {onSettingsClick && (
+            <button
+              onClick={onSettingsClick}
+              className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+              title="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          )}
+
+          {/* Logout Button */}
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-lg transition-colors"
+              title="Logout"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+      )}
     </header>
   );
 }

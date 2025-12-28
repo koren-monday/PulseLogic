@@ -117,6 +117,27 @@ export interface AnalysisResponse {
   tokensUsed?: number;
 }
 
+// Chat types for conversation continuation
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatRequest {
+  provider: LLMProvider;
+  apiKey: string;
+  healthData: GarminHealthData;
+  model?: string;
+  messages: ChatMessage[];
+}
+
+export interface ChatResponse {
+  provider: LLMProvider;
+  model: string;
+  message: string;
+  tokensUsed?: number;
+}
+
 // ============================================================================
 // API Response Types
 // ============================================================================

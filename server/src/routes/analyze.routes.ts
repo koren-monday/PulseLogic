@@ -1,8 +1,15 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
-import { analyzeHealthData } from '../services/llm/llm.service.js';
+import { analyzeHealthData, chatAboutHealth } from '../services/llm/llm.service.js';
 import { MODEL_REGISTRY } from '../services/llm/models.js';
 import { validate } from '../middleware/index.js';
-import { AnalyzeRequestSchema, type ApiResponse, type AnalysisResponse, type LLMProvider } from '../types/index.js';
+import {
+  AnalyzeRequestSchema,
+  ChatRequestSchema,
+  type ApiResponse,
+  type AnalysisResponse,
+  type ChatResponse,
+  type LLMProvider,
+} from '../types/index.js';
 
 const router = Router();
 
@@ -42,6 +49,40 @@ router.post(
           provider: result.provider,
           model: result.model,
           analysis: result.content,
+          tokensUsed: result.tokensUsed,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/analyze/chat
+ * Continue a conversation about the health data with follow-up questions
+ */
+router.post(
+  '/chat',
+  validate(ChatRequestSchema),
+  async (req: Request, res: Response<ApiResponse<ChatResponse>>, next: NextFunction) => {
+    try {
+      const { provider, apiKey, healthData, model, messages } = req.body;
+
+      const result = await chatAboutHealth({
+        provider: provider as LLMProvider,
+        apiKey,
+        healthData,
+        model,
+        messages,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          provider: result.provider,
+          model: result.model,
+          message: result.content,
           tokensUsed: result.tokensUsed,
         },
       });

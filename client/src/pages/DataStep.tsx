@@ -56,8 +56,8 @@ export function DataStep({ onComplete, onBack }: DataStepProps) {
             onChange={e => setDays(Number(e.target.value))}
           >
             <option value={7}>7 days</option>
-            <option value={14}>14 days</option>
             <option value={30}>30 days</option>
+            <option value={180}>180 days</option>
           </select>
         </div>
 
@@ -216,9 +216,9 @@ export function DataStep({ onComplete, onBack }: DataStepProps) {
         </div>
       )}
 
-      {/* Back Button */}
+      {/* Logout Button */}
       <button className="btn-secondary w-full" onClick={onBack}>
-        Back to Configuration
+        Logout
       </button>
     </div>
   );

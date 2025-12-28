@@ -153,3 +153,43 @@ ${customPrompt}`;
   return `${basePrompt}
 ${analysisInstructions}`;
 }
+
+/**
+ * Build the system prompt for follow-up chat conversations.
+ * Includes the health data as context so follow-up questions can reference it.
+ */
+export function buildChatSystemPrompt(healthData: GarminHealthData): string {
+  return `You are an expert sports scientist and health analyst having a follow-up conversation about a user's Garmin health data.
+
+## Your Role
+You've previously analyzed the user's health data and are now answering follow-up questions. Be helpful, specific, and reference the actual data when answering.
+
+## The User's Health Data (for reference)
+Date range: ${healthData.dateRange.start} to ${healthData.dateRange.end}
+
+### Sleep Data Summary
+${healthData.sleep.length} nights of sleep data available.
+${JSON.stringify(healthData.sleep.slice(0, 5), null, 2)}${healthData.sleep.length > 5 ? `\n...and ${healthData.sleep.length - 5} more nights` : ''}
+
+### Stress Data Summary
+${healthData.stress.length} days of stress data available.
+${JSON.stringify(healthData.stress.slice(0, 5), null, 2)}${healthData.stress.length > 5 ? `\n...and ${healthData.stress.length - 5} more days` : ''}
+
+### Body Battery Summary
+${healthData.bodyBattery.length} days of body battery data available.
+${JSON.stringify(healthData.bodyBattery.slice(0, 5), null, 2)}${healthData.bodyBattery.length > 5 ? `\n...and ${healthData.bodyBattery.length - 5} more days` : ''}
+
+### Activities Summary
+${healthData.activities.length} activities recorded.
+${JSON.stringify(healthData.activities.slice(0, 5), null, 2)}${healthData.activities.length > 5 ? `\n...and ${healthData.activities.length - 5} more activities` : ''}
+
+### Heart Rate Summary
+${healthData.heartRate.length} days of heart rate data available.
+${JSON.stringify(healthData.heartRate.slice(0, 5), null, 2)}${healthData.heartRate.length > 5 ? `\n...and ${healthData.heartRate.length - 5} more days` : ''}
+
+## Guidelines
+- Reference specific dates and values when answering
+- Be concise but thorough
+- If the user asks about something not in the data, let them know
+- Provide actionable advice when relevant`;
+}

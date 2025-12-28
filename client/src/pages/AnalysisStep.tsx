@@ -1,15 +1,16 @@
-import { useState, useEffect } from 'react';
-import { Brain, Sparkles, RefreshCw, ChevronLeft, Copy, Check, Cpu } from 'lucide-react';
-import { useAnalysis, useModelRegistry } from '../hooks';
+import { useState, useEffect, useRef } from 'react';
+import { Brain, Sparkles, RefreshCw, ChevronLeft, Copy, Check, Cpu, Send, MessageCircle, User, Bot } from 'lucide-react';
+import { useAnalysis, useChat, useModelRegistry } from '../hooks';
 import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { getApiKey } from '../utils/storage';
-import type { GarminHealthData, LLMProvider, AnalysisResponse } from '../types';
+import type { UserSettings } from '../utils/storage';
+import type { GarminHealthData, LLMProvider, AnalysisResponse, ChatMessage } from '../types';
 
 interface AnalysisStepProps {
   healthData: GarminHealthData;
   selectedProvider: LLMProvider;
   selectedModel: string;
+  userSettings: UserSettings;
   onBack: () => void;
   onReset: () => void;
 }
@@ -18,6 +19,7 @@ export function AnalysisStep({
   healthData,
   selectedProvider,
   selectedModel,
+  userSettings,
   onBack,
   onReset,
 }: AnalysisStepProps) {
@@ -27,8 +29,14 @@ export function AnalysisStep({
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Chat state
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   const { data: modelRegistry, isLoading: modelsLoading } = useModelRegistry();
   const analysisMutation = useAnalysis();
+  const chatMutation = useChat();
 
   // Update active model when provider changes
   useEffect(() => {
@@ -43,9 +51,9 @@ export function AnalysisStep({
   }, [activeProvider, modelRegistry, activeModel]);
 
   const handleAnalyze = async () => {
-    const apiKey = getApiKey(activeProvider);
+    const apiKey = userSettings.apiKeys[activeProvider];
     if (!apiKey) {
-      alert(`No API key found for ${modelRegistry?.[activeProvider]?.name || activeProvider}`);
+      alert(`No API key found for ${modelRegistry?.[activeProvider]?.name || activeProvider}. Please configure it in Settings.`);
       return;
     }
 
@@ -71,6 +79,47 @@ export function AnalysisStep({
     }
   };
 
+  // Scroll chat to bottom when new messages appear
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  // Initialize chat with analysis as first assistant message
+  useEffect(() => {
+    if (analysis && chatMessages.length === 0) {
+      setChatMessages([{ role: 'assistant', content: analysis.analysis }]);
+    }
+  }, [analysis, chatMessages.length]);
+
+  const handleSendChat = async () => {
+    if (!chatInput.trim() || chatMutation.isPending) return;
+
+    const apiKey = userSettings.apiKeys[activeProvider];
+    if (!apiKey) {
+      alert(`No API key found for ${modelRegistry?.[activeProvider]?.name || activeProvider}. Please configure it in Settings.`);
+      return;
+    }
+
+    const userMessage: ChatMessage = { role: 'user', content: chatInput.trim() };
+    const newMessages = [...chatMessages, userMessage];
+    setChatMessages(newMessages);
+    setChatInput('');
+
+    try {
+      const result = await chatMutation.mutateAsync({
+        provider: activeProvider,
+        apiKey,
+        healthData,
+        model: activeModel,
+        messages: newMessages,
+      });
+      setChatMessages([...newMessages, { role: 'assistant', content: result.message }]);
+    } catch {
+      // Error is handled by mutation, remove the user message if failed
+      setChatMessages(chatMessages);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Analysis Controls */}
@@ -87,7 +136,7 @@ export function AnalysisStep({
         {/* Provider Selection */}
         <div className="flex gap-2 mb-4">
           {(['openai', 'anthropic', 'google'] as LLMProvider[]).map(provider => {
-            const hasKey = !!getApiKey(provider);
+            const hasKey = !!userSettings.apiKeys[provider];
             const providerName = modelRegistry?.[provider]?.name || provider;
             return (
               <button
@@ -171,22 +220,22 @@ export function AnalysisStep({
         </button>
       </div>
 
-      {/* Analysis Results */}
-      {analysis && (
+      {/* Conversation Thread */}
+      {chatMessages.length > 0 && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-yellow-400" />
-              <h3 className="font-semibold">Analysis Results</h3>
+              <MessageCircle className="w-5 h-5 text-garmin-blue" />
+              <h3 className="font-semibold">Conversation</h3>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500">
-                {analysis.model} {analysis.tokensUsed && `• ${analysis.tokensUsed} tokens`}
+                {activeModel}
               </span>
               <button
                 className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
                 onClick={handleCopy}
-                title="Copy to clipboard"
+                title="Copy analysis to clipboard"
               >
                 {copied ? (
                   <Check className="w-4 h-4 text-green-400" />
@@ -197,20 +246,89 @@ export function AnalysisStep({
             </div>
           </div>
 
-          <div className="prose prose-invert prose-sm max-w-none">
-            <div
-              className="text-slate-300 leading-relaxed whitespace-pre-wrap"
-              dangerouslySetInnerHTML={{
-                __html: analysis.analysis
-                  .replace(/^### (.*$)/gm, '<h3 class="text-lg font-semibold text-white mt-4 mb-2">$1</h3>')
-                  .replace(/^## (.*$)/gm, '<h2 class="text-xl font-bold text-white mt-6 mb-3">$1</h2>')
-                  .replace(/^# (.*$)/gm, '<h1 class="text-2xl font-bold text-white mt-6 mb-4">$1</h1>')
-                  .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>')
-                  .replace(/^\- (.*$)/gm, '<li class="ml-4">$1</li>')
-                  .replace(/^\d+\. (.*$)/gm, '<li class="ml-4 list-decimal">$1</li>'),
-              }}
-            />
+          {/* Messages */}
+          <div className="space-y-4 max-h-[500px] overflow-y-auto mb-4 pr-2">
+            {chatMessages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}
+              >
+                {msg.role === 'assistant' && (
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-garmin-blue flex items-center justify-center">
+                    <Bot className="w-4 h-4 text-white" />
+                  </div>
+                )}
+                <div
+                  className={`
+                    max-w-[85%] rounded-lg p-4
+                    ${msg.role === 'user'
+                      ? 'bg-garmin-blue text-white'
+                      : 'bg-slate-700 text-slate-300'}
+                  `}
+                >
+                  {msg.role === 'assistant' ? (
+                    <div
+                      className="prose prose-invert prose-sm max-w-none leading-relaxed whitespace-pre-wrap"
+                      dangerouslySetInnerHTML={{
+                        __html: msg.content
+                          .replace(/^### (.*$)/gm, '<h3 class="text-lg font-semibold text-white mt-4 mb-2">$1</h3>')
+                          .replace(/^## (.*$)/gm, '<h2 class="text-xl font-bold text-white mt-6 mb-3">$1</h2>')
+                          .replace(/^# (.*$)/gm, '<h1 class="text-2xl font-bold text-white mt-6 mb-4">$1</h1>')
+                          .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>')
+                          .replace(/^\- (.*$)/gm, '<li class="ml-4">$1</li>')
+                          .replace(/^\d+\. (.*$)/gm, '<li class="ml-4 list-decimal">$1</li>'),
+                      }}
+                    />
+                  ) : (
+                    <p className="text-sm">{msg.content}</p>
+                  )}
+                </div>
+                {msg.role === 'user' && (
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center">
+                    <User className="w-4 h-4 text-white" />
+                  </div>
+                )}
+              </div>
+            ))}
+            {chatMutation.isPending && (
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-garmin-blue flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-white" />
+                </div>
+                <div className="bg-slate-700 rounded-lg p-4">
+                  <LoadingSpinner size="sm" message="Thinking..." />
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
           </div>
+
+          {/* Chat Input */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              className="input-field flex-1"
+              placeholder="Ask a follow-up question about your health data..."
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSendChat()}
+              disabled={chatMutation.isPending}
+            />
+            <button
+              className="btn-primary px-4 flex items-center gap-2"
+              onClick={handleSendChat}
+              disabled={!chatInput.trim() || chatMutation.isPending}
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+
+          {chatMutation.isError && (
+            <Alert
+              type="error"
+              message={chatMutation.error?.message || 'Failed to send message'}
+            />
+          )}
         </div>
       )}
 

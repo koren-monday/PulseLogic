@@ -1,7 +1,7 @@
 import { generateText } from 'ai';
-import type { GarminHealthData } from '../../types/index.js';
+import type { GarminHealthData, ChatMessage } from '../../types/index.js';
 import { createModel, getDefaultModel, isValidModel, type LLMProvider } from './models.js';
-import { buildSystemPrompt, buildUserPrompt } from './provider.interface.js';
+import { buildSystemPrompt, buildUserPrompt, buildChatSystemPrompt } from './provider.interface.js';
 
 export interface AnalyzeOptions {
   provider: LLMProvider;
@@ -9,6 +9,14 @@ export interface AnalyzeOptions {
   healthData: GarminHealthData;
   model?: string;
   customPrompt?: string;
+}
+
+export interface ChatOptions {
+  provider: LLMProvider;
+  apiKey: string;
+  healthData: GarminHealthData;
+  model?: string;
+  messages: ChatMessage[];
 }
 
 export interface AnalysisResult {
@@ -43,6 +51,43 @@ export async function analyzeHealthData(options: AnalyzeOptions): Promise<Analys
     prompt: buildUserPrompt(healthData, customPrompt),
     maxTokens: 8000,
     temperature: 0.5, // Lower temperature for more focused, analytical output
+  });
+
+  return {
+    content: result.text,
+    model: modelId,
+    provider,
+    tokensUsed: result.usage?.totalTokens,
+  };
+}
+
+/**
+ * Continue a conversation about health data.
+ * Maintains context from previous messages for follow-up questions.
+ */
+export async function chatAboutHealth(options: ChatOptions): Promise<AnalysisResult> {
+  const { provider, apiKey, healthData, messages } = options;
+
+  const modelId = options.model || getDefaultModel(provider);
+
+  if (options.model && !isValidModel(provider, options.model)) {
+    throw new Error(`Invalid model "${options.model}" for provider "${provider}"`);
+  }
+
+  const model = createModel(provider, modelId, apiKey);
+
+  // Build messages array for the AI SDK
+  const aiMessages = messages.map((msg) => ({
+    role: msg.role as 'user' | 'assistant',
+    content: msg.content,
+  }));
+
+  const result = await generateText({
+    model,
+    system: buildChatSystemPrompt(healthData),
+    messages: aiMessages,
+    maxTokens: 4000,
+    temperature: 0.5,
   });
 
   return {

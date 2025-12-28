@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { analyzeHealthData, fetchModelRegistry } from '../services/api';
-import type { GarminHealthData, LLMProvider } from '../types';
+import { analyzeHealthData, chatAboutHealth, fetchModelRegistry } from '../services/api';
+import type { GarminHealthData, LLMProvider, ChatMessage } from '../types';
 
 interface AnalyzeParams {
   provider: LLMProvider;
@@ -8,6 +8,14 @@ interface AnalyzeParams {
   healthData: GarminHealthData;
   model?: string;
   customPrompt?: string;
+}
+
+interface ChatParams {
+  provider: LLMProvider;
+  apiKey: string;
+  healthData: GarminHealthData;
+  model?: string;
+  messages: ChatMessage[];
 }
 
 export function useModelRegistry() {
@@ -27,6 +35,19 @@ export function useAnalysis() {
         healthData,
         model,
         customPrompt,
+      }),
+  });
+}
+
+export function useChat() {
+  return useMutation({
+    mutationFn: ({ provider, apiKey, healthData, model, messages }: ChatParams) =>
+      chatAboutHealth({
+        provider,
+        apiKey,
+        healthData,
+        model,
+        messages,
       }),
   });
 }

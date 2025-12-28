@@ -6,6 +6,8 @@ import type {
   LLMProvider,
   AnalysisResponse,
   ModelRegistry,
+  ChatMessage,
+  ChatResponse,
 } from '../types';
 import { getSessionId, storeSessionId } from '../utils/storage';
 
@@ -109,6 +111,27 @@ export async function analyzeHealthData(options: AnalyzeOptions): Promise<Analys
       healthData: options.healthData,
       model: options.model,
       customPrompt: options.customPrompt,
+    }),
+  });
+}
+
+export interface ChatOptions {
+  provider: LLMProvider;
+  apiKey: string;
+  healthData: GarminHealthData;
+  model?: string;
+  messages: ChatMessage[];
+}
+
+export async function chatAboutHealth(options: ChatOptions): Promise<ChatResponse> {
+  return apiFetch<ChatResponse>('/analyze/chat', {
+    method: 'POST',
+    body: JSON.stringify({
+      provider: options.provider,
+      apiKey: options.apiKey,
+      healthData: options.healthData,
+      model: options.model,
+      messages: options.messages,
     }),
   });
 }
