@@ -1,37 +1,33 @@
 # Render.com Blueprint Configuration
-# Deploy with: https://render.com/deploy
 
 services:
-  # Backend API Server (Docker for Puppeteer/Chrome support)
+  # Backend API Server
   - type: web
     name: garmin-insights-api
-    runtime: docker
-    dockerfilePath: ./Dockerfile.server
+    runtime: node
     plan: free
+    buildCommand: yarn install && yarn build:server
+    startCommand: cd server && node dist/index.js
     envVars:
       - key: NODE_ENV
         value: production
       - key: ALLOWED_ORIGIN
-        sync: false  # Set manually after frontend deploys
-      - key: RATE_LIMIT_WINDOW_MS
-        value: 60000
-      - key: RATE_LIMIT_MAX_REQUESTS
-        value: 100
+        sync: false
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: "true"
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /usr/bin/chromium-browser
 
   # Frontend Static Site
   - type: web
     name: garmin-insights-web
     runtime: static
     plan: free
-    buildCommand: yarn install && cd client && yarn build
+    buildCommand: yarn install && yarn build:client
     staticPublishPath: client/dist
     envVars:
       - key: VITE_API_URL
-        sync: false  # Set manually to API URL
-    headers:
-      - path: /*
-        name: X-Frame-Options
-        value: DENY
+        sync: false
     routes:
       - type: rewrite
         source: /*
