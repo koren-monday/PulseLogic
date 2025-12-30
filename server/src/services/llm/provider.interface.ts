@@ -1,4 +1,4 @@
-import type { GarminHealthData } from '../../types/index.js';
+import type { GarminHealthData, LifeContext } from '../../types/index.js';
 
 /**
  * Response structure from any LLM provider
@@ -101,9 +101,149 @@ Use specific numbers and dates throughout. Be direct and insightful, not generic
 }
 
 /**
+ * Format life contexts into a human-readable section for the AI prompt.
+ * Provides temporal context and expectations for metric analysis.
+ */
+function formatLifeContexts(lifeContexts: LifeContext[]): string {
+  if (!lifeContexts || lifeContexts.length === 0) return '';
+
+  const formatDate = (dateStr: string): string => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const calculateDaysAgo = (dateStr: string): string => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'today';
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    return `${Math.floor(diffDays / 30)} months ago`;
+  };
+
+  const contextDescriptions = lifeContexts.map(ctx => {
+    switch (ctx.type) {
+      case 'new_baby': {
+        const daysAgo = calculateDaysAgo(ctx.birthDate);
+        const date = formatDate(ctx.birthDate);
+        return `- **New Baby**: Born ${date} (${daysAgo}). ${ctx.notes || ''}
+  CONTEXT: Expect significant sleep disruption, elevated stress, irregular patterns. Recovery metrics may be compromised. This is expected and normal for new parents.`;
+      }
+
+      case 'pregnancy': {
+        let detail = '';
+        if (ctx.currentWeek) detail = `Currently week ${ctx.currentWeek}`;
+        else if (ctx.dueDate) detail = `Due ${formatDate(ctx.dueDate)}`;
+        return `- **Pregnancy**: ${detail}. ${ctx.notes || ''}
+  CONTEXT: Resting heart rate typically elevated. Sleep architecture changes throughout pregnancy. Body Battery may show different patterns. Evaluate metrics against pregnancy baselines, not pre-pregnancy.`;
+      }
+
+      case 'diet_change': {
+        const dietLabels: Record<string, string> = {
+          keto: 'Ketogenic diet',
+          low_carb: 'Low carbohydrate diet',
+          vegan: 'Vegan diet',
+          vegetarian: 'Vegetarian diet',
+          fasting: 'Intermittent fasting',
+          calorie_restriction: 'Calorie restriction',
+          other: ctx.customDietType || 'Diet change',
+        };
+        const diet = dietLabels[ctx.dietType] || ctx.dietType;
+        const startedAgo = calculateDaysAgo(ctx.startDate);
+        return `- **Diet Change**: ${diet} started ${formatDate(ctx.startDate)} (${startedAgo}). ${ctx.notes || ''}
+  CONTEXT: Diet changes can affect energy levels, sleep quality, and recovery. Keto/low-carb may cause initial fatigue. Fasting may affect workout timing and recovery.`;
+      }
+
+      case 'stress_event': {
+        const severityImpact = {
+          mild: 'Minor impact expected',
+          moderate: 'Noticeable impact on stress metrics and sleep quality likely',
+          severe: 'Significant impact on all metrics expected - elevated stress, disrupted sleep, reduced recovery',
+        };
+        return `- **Stress Event** (${ctx.severity}): ${ctx.category} - ${ctx.description}${ctx.startDate ? `. Started ${formatDate(ctx.startDate)}` : ''}.
+  CONTEXT: ${severityImpact[ctx.severity]}. Consider this when analyzing stress levels and sleep quality.`;
+      }
+
+      case 'illness': {
+        const illnessLabels: Record<string, string> = {
+          cold_flu: 'Cold/Flu',
+          injury: 'Injury',
+          surgery: 'Surgery',
+          covid: 'COVID-19',
+          chronic: 'Chronic condition',
+          other: ctx.customIllnessType || 'Illness',
+        };
+        const illness = illnessLabels[ctx.illnessType] || ctx.illnessType;
+        const ongoing = ctx.endDate ? `Ended ${formatDate(ctx.endDate)}` : 'Ongoing';
+        return `- **Illness/Recovery**: ${illness} starting ${formatDate(ctx.startDate)}. ${ongoing}. ${ctx.notes || ''}
+  CONTEXT: Illness significantly affects all metrics. Elevated resting HR, poor sleep quality, low Body Battery are expected during illness. Recovery period may show gradual improvement.`;
+      }
+
+      case 'travel': {
+        const tzInfo = ctx.timezoneChange ? `Timezone change: ${ctx.timezoneChange}` : 'Travel';
+        const duration = ctx.endDate
+          ? `${formatDate(ctx.startDate)} to ${formatDate(ctx.endDate)}`
+          : `From ${formatDate(ctx.startDate)}`;
+        return `- **Travel**: ${tzInfo}. ${duration}. ${ctx.notes || ''}
+  CONTEXT: Jet lag and timezone changes disrupt circadian rhythm. Expect 1-2 days of adjustment per hour of timezone shift. Sleep timing and quality may be affected.`;
+      }
+
+      case 'training_goal': {
+        const eventLabels: Record<string, string> = {
+          marathon: 'Marathon',
+          half_marathon: 'Half Marathon',
+          triathlon: 'Triathlon',
+          '5k_10k': '5K/10K',
+          competition: 'Competition',
+          other: ctx.customEventType || 'Event',
+        };
+        const event = eventLabels[ctx.eventType] || ctx.eventType;
+        const dateInfo = ctx.eventDate ? ` on ${formatDate(ctx.eventDate)}` : '';
+        return `- **Training Goal**: ${event}${dateInfo}. ${ctx.notes || ''}
+  CONTEXT: Training for an event means periodized load. Look for appropriate stress/recovery balance. Consider taper periods before events. Higher training load should correlate with adequate recovery.`;
+      }
+
+      case 'medication': {
+        const duration = ctx.endDate
+          ? `${formatDate(ctx.startDate)} to ${formatDate(ctx.endDate)}`
+          : `Since ${formatDate(ctx.startDate)} (ongoing)`;
+        return `- **Medication**: ${ctx.medicationName}. ${duration}. ${ctx.notes || ''}
+  CONTEXT: Some medications affect heart rate (beta blockers lower it), sleep architecture (sleep aids), or stress response. Consider medication effects when analyzing metrics.`;
+      }
+
+      case 'other':
+        return `- **Other Context**: ${ctx.description}
+  CONTEXT: Consider this information when analyzing patterns and providing recommendations.`;
+
+      default:
+        return '';
+    }
+  });
+
+  return `
+## Personal Life Context
+
+The user has provided the following personal circumstances that may affect their health metrics:
+
+${contextDescriptions.filter(Boolean).join('\n\n')}
+
+**IMPORTANT**: Use this context to:
+1. Correlate metric anomalies with life events (e.g., poor sleep coinciding with new baby)
+2. Adjust expectations - some "problems" are expected given the circumstances
+3. Provide contextually appropriate recommendations
+4. Avoid suggesting changes that conflict with their current situation`;
+}
+
+/**
  * Build the user prompt containing the health data context
  */
-export function buildUserPrompt(healthData: GarminHealthData, customPrompt?: string): string {
+export function buildUserPrompt(healthData: GarminHealthData, customPrompt?: string, lifeContexts?: LifeContext[]): string {
+  const lifeContextSection = formatLifeContexts(lifeContexts || []);
+
   const basePrompt = `Here is my Garmin health data for the period ${healthData.dateRange.start} to ${healthData.dateRange.end}:
 
 ## Sleep Data
@@ -142,16 +282,19 @@ Perform a thorough investigation of this data:
 
 Be investigative. Be specific. Use actual dates and numbers from the data.`;
 
-  if (customPrompt) {
-    return `${basePrompt}
-${analysisInstructions}
+  // Combine all sections
+  let fullPrompt = basePrompt + '\n' + analysisInstructions;
 
-## Additional Focus Area
+  if (lifeContextSection) {
+    fullPrompt += '\n' + lifeContextSection;
+  }
+
+  if (customPrompt) {
+    fullPrompt += `\n\n## Additional Focus Area
 ${customPrompt}`;
   }
 
-  return `${basePrompt}
-${analysisInstructions}`;
+  return fullPrompt;
 }
 
 /**

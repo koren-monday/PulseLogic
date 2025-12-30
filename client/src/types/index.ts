@@ -102,12 +102,124 @@ export interface LLMConfig {
   model?: string;
 }
 
+// ============================================================================
+// Life Context Types - Personal circumstances affecting health metrics
+// ============================================================================
+
+export type LifeContextType =
+  | 'new_baby'
+  | 'pregnancy'
+  | 'diet_change'
+  | 'stress_event'
+  | 'illness'
+  | 'travel'
+  | 'training_goal'
+  | 'medication'
+  | 'other';
+
+export interface LifeContextBase {
+  id: string;
+  type: LifeContextType;
+}
+
+export interface NewBabyContext extends LifeContextBase {
+  type: 'new_baby';
+  birthDate: string;
+  notes?: string;
+}
+
+export interface PregnancyContext extends LifeContextBase {
+  type: 'pregnancy';
+  dueDate?: string;
+  currentWeek?: number;
+  notes?: string;
+}
+
+export interface DietChangeContext extends LifeContextBase {
+  type: 'diet_change';
+  dietType: 'keto' | 'low_carb' | 'vegan' | 'vegetarian' | 'fasting' | 'calorie_restriction' | 'other';
+  customDietType?: string;
+  startDate: string;
+  notes?: string;
+}
+
+export interface StressEventContext extends LifeContextBase {
+  type: 'stress_event';
+  category: 'work' | 'personal' | 'health' | 'financial' | 'relationship' | 'other';
+  severity: 'mild' | 'moderate' | 'severe';
+  description: string;
+  startDate?: string;
+}
+
+export interface IllnessContext extends LifeContextBase {
+  type: 'illness';
+  illnessType: 'cold_flu' | 'injury' | 'surgery' | 'covid' | 'chronic' | 'other';
+  customIllnessType?: string;
+  startDate: string;
+  endDate?: string;
+  notes?: string;
+}
+
+export interface TravelContext extends LifeContextBase {
+  type: 'travel';
+  timezoneChange?: string;
+  startDate: string;
+  endDate?: string;
+  notes?: string;
+}
+
+export interface TrainingGoalContext extends LifeContextBase {
+  type: 'training_goal';
+  eventType: 'marathon' | 'half_marathon' | 'triathlon' | '5k_10k' | 'competition' | 'other';
+  customEventType?: string;
+  eventDate?: string;
+  notes?: string;
+}
+
+export interface MedicationContext extends LifeContextBase {
+  type: 'medication';
+  medicationName: string;
+  startDate: string;
+  endDate?: string;
+  notes?: string;
+}
+
+export interface OtherContext extends LifeContextBase {
+  type: 'other';
+  description: string;
+}
+
+export type LifeContext =
+  | NewBabyContext
+  | PregnancyContext
+  | DietChangeContext
+  | StressEventContext
+  | IllnessContext
+  | TravelContext
+  | TrainingGoalContext
+  | MedicationContext
+  | OtherContext;
+
+// Metadata for UI display
+export const LIFE_CONTEXT_LABELS: Record<LifeContextType, { label: string; icon: string; description: string }> = {
+  new_baby: { label: 'New Baby', icon: '👶', description: 'Postpartum period affecting sleep and stress' },
+  pregnancy: { label: 'Pregnancy', icon: '🤰', description: 'Pregnancy-related changes to metrics' },
+  diet_change: { label: 'Diet Change', icon: '🥗', description: 'Recent dietary changes' },
+  stress_event: { label: 'Stress Event', icon: '😰', description: 'Major life stressor' },
+  illness: { label: 'Illness/Recovery', icon: '🤒', description: 'Illness or recovery period' },
+  travel: { label: 'Travel', icon: '✈️', description: 'Timezone changes or travel' },
+  training_goal: { label: 'Training Goal', icon: '🎯', description: 'Upcoming event or competition' },
+  medication: { label: 'Medication', icon: '💊', description: 'New or changed medication' },
+  other: { label: 'Other', icon: '📝', description: 'Other relevant context' },
+};
+
 export interface AnalysisRequest {
   provider: LLMProvider;
   apiKey: string;
   healthData: GarminHealthData;
   model?: string;
   customPrompt?: string;
+  lifeContexts?: LifeContext[];
 }
 
 export interface AnalysisResponse {

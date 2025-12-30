@@ -8,6 +8,7 @@ import type {
   ModelRegistry,
   ChatMessage,
   ChatResponse,
+  LifeContext,
 } from '../types';
 import { getSessionId, storeSessionId } from '../utils/storage';
 
@@ -100,6 +101,7 @@ export interface AnalyzeOptions {
   healthData: GarminHealthData;
   model?: string;
   customPrompt?: string;
+  lifeContexts?: LifeContext[];
 }
 
 export async function analyzeHealthData(options: AnalyzeOptions): Promise<AnalysisResponse> {
@@ -111,6 +113,7 @@ export async function analyzeHealthData(options: AnalyzeOptions): Promise<Analys
       healthData: options.healthData,
       model: options.model,
       customPrompt: options.customPrompt,
+      lifeContexts: options.lifeContexts,
     }),
   });
 }

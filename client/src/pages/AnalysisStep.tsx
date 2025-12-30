@@ -3,8 +3,9 @@ import { Brain, Sparkles, RefreshCw, ChevronLeft, Copy, Check, Cpu, Send, Messag
 import { useAnalysis, useChat, useModelRegistry } from '../hooks';
 import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LifeContextSelector } from '../components/LifeContextSelector';
 import type { UserSettings } from '../utils/storage';
-import type { GarminHealthData, LLMProvider, AnalysisResponse, ChatMessage } from '../types';
+import type { GarminHealthData, LLMProvider, AnalysisResponse, ChatMessage, LifeContext } from '../types';
 
 interface AnalysisStepProps {
   healthData: GarminHealthData;
@@ -26,6 +27,7 @@ export function AnalysisStep({
   const [activeProvider, setActiveProvider] = useState<LLMProvider>(selectedProvider);
   const [activeModel, setActiveModel] = useState<string>(selectedModel);
   const [customPrompt, setCustomPrompt] = useState('');
+  const [lifeContexts, setLifeContexts] = useState<LifeContext[]>([]);
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -64,6 +66,7 @@ export function AnalysisStep({
         healthData,
         model: activeModel,
         customPrompt: customPrompt || undefined,
+        lifeContexts: lifeContexts.length > 0 ? lifeContexts : undefined,
       });
       setAnalysis(result);
     } catch {
@@ -183,6 +186,12 @@ export function AnalysisStep({
             <Alert type="error" message="Failed to load models" />
           )}
         </div>
+
+        {/* Life Context */}
+        <LifeContextSelector
+          contexts={lifeContexts}
+          onChange={setLifeContexts}
+        />
 
         {/* Custom Prompt */}
         <div className="mb-4">

@@ -1,5 +1,5 @@
 import { generateText } from 'ai';
-import type { GarminHealthData, ChatMessage } from '../../types/index.js';
+import type { GarminHealthData, ChatMessage, LifeContext } from '../../types/index.js';
 import { createModel, getDefaultModel, isValidModel, type LLMProvider } from './models.js';
 import { buildSystemPrompt, buildUserPrompt, buildChatSystemPrompt } from './provider.interface.js';
 
@@ -9,6 +9,7 @@ export interface AnalyzeOptions {
   healthData: GarminHealthData;
   model?: string;
   customPrompt?: string;
+  lifeContexts?: LifeContext[];
 }
 
 export interface ChatOptions {
@@ -31,7 +32,7 @@ export interface AnalysisResult {
  * Provides consistent interface across OpenAI, Anthropic, and Google.
  */
 export async function analyzeHealthData(options: AnalyzeOptions): Promise<AnalysisResult> {
-  const { provider, apiKey, healthData, customPrompt } = options;
+  const { provider, apiKey, healthData, customPrompt, lifeContexts } = options;
 
   // Use specified model or fall back to provider default
   const modelId = options.model || getDefaultModel(provider);
@@ -48,7 +49,7 @@ export async function analyzeHealthData(options: AnalyzeOptions): Promise<Analys
   const result = await generateText({
     model,
     system: buildSystemPrompt(),
-    prompt: buildUserPrompt(healthData, customPrompt),
+    prompt: buildUserPrompt(healthData, customPrompt, lifeContexts),
     maxTokens: 8000,
     temperature: 0.5, // Lower temperature for more focused, analytical output
   });

@@ -33,7 +33,7 @@ router.post(
   validate(AnalyzeRequestSchema),
   async (req: Request, res: Response<ApiResponse<AnalysisResponse>>, next: NextFunction) => {
     try {
-      const { provider, apiKey, healthData, model, customPrompt } = req.body;
+      const { provider, apiKey, healthData, model, customPrompt, lifeContexts } = req.body;
 
       const result = await analyzeHealthData({
         provider: provider as LLMProvider,
@@ -41,6 +41,7 @@ router.post(
         healthData,
         model,
         customPrompt,
+        lifeContexts,
       });
 
       res.json({
