@@ -19,8 +19,9 @@ services:
         value: /usr/bin/chromium-browser
 
   # Frontend Static Site
-  - type: static
+  - type: web
     name: garmin-insights-web
+    runtime: static
     buildCommand: yarn install && yarn build:client
     staticPublishPath: client/dist
     envVars:
