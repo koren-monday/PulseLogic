@@ -12,7 +12,7 @@ import {
   clearSession,
   type UserSettings,
 } from './utils/storage';
-import type { GarminHealthData, LLMProvider } from './types';
+import type { GarminHealthData } from './types';
 
 type AppStep = 'data' | 'analysis';
 
