@@ -6,7 +6,7 @@ services:
     name: garmin-insights-api
     runtime: node
     plan: free
-    buildCommand: yarn install && yarn build:server
+    buildCommand: yarn install --production=false && yarn build:server
     startCommand: cd server && node dist/index.js
     envVars:
       - key: NODE_ENV

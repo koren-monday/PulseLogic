@@ -257,9 +257,6 @@ export class GarminService {
     };
   }
 
-  // Raw sleep data type from Garmin API
-  private rawSleepCache: Map<string, unknown> = new Map();
-
   private async fetchSleepDataRaw(dates: string[]): Promise<Map<string, unknown>> {
     const results = new Map<string, unknown>();
 
@@ -347,34 +344,6 @@ export class GarminService {
           highestLevel: values.length > 0 ? Math.max(...values) : 0,
           lowestLevel: values.length > 0 ? Math.min(...values) : 0,
         });
-      }
-    }
-
-    return results;
-  }
-
-  private async fetchSleepData(dates: string[]): Promise<SleepData[]> {
-    const results: SleepData[] = [];
-
-    for (const date of dates) {
-      try {
-        const dateObj = new Date(date);
-        const data = await this.client!.getSleepData(dateObj);
-        if (data && data.dailySleepDTO) {
-          const dto = data.dailySleepDTO;
-          results.push({
-            date,
-            sleepTimeSeconds: dto.sleepTimeSeconds ?? 0,
-            deepSleepSeconds: dto.deepSleepSeconds ?? 0,
-            lightSleepSeconds: dto.lightSleepSeconds ?? 0,
-            remSleepSeconds: dto.remSleepSeconds ?? 0,
-            awakeSleepSeconds: dto.awakeSleepSeconds ?? 0,
-            sleepScore: dto.sleepScores?.overall?.value ?? null,
-            restingHeartRate: data.restingHeartRate ?? null,
-          });
-        }
-      } catch {
-        // Skip days without sleep data
       }
     }
 
