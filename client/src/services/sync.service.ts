@@ -129,6 +129,15 @@ export async function syncReportsAndActionsOnLogin(userId: string): Promise<void
   if (!(await isSyncEnabled())) return;
 
   try {
+    // Clear local IndexedDB first to prevent data from previous user
+    await Promise.all([
+      db.reports.clear(),
+      db.actions.clear(),
+      db.insights.clear(),
+      db.metrics.clear(),
+      db.progress.clear(),
+    ]);
+
     const [cloudReports, cloudActions] = await Promise.all([
       fetchCloudReports(userId, 50),
       fetchCloudActions(userId),

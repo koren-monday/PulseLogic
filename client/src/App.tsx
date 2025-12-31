@@ -17,6 +17,7 @@ import {
   type UserSettings,
 } from './utils/storage';
 import { syncOnLogin, pushSettingsToCloud, syncReportsAndActionsOnLogin } from './services/sync.service';
+import { clearAllData } from './services/storage.service';
 import type { GarminHealthData } from './types';
 import type { SavedReport } from './db/schema';
 
@@ -72,8 +73,10 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     clearSession();
+    // Clear IndexedDB to prevent data leaking between accounts
+    await clearAllData();
     setIsLoggedIn(false);
     setUserId(null);
     setDisplayName('');
