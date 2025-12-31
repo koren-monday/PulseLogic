@@ -9,6 +9,7 @@ import type {
   ChatMessage,
   ChatResponse,
   LifeContext,
+  DailyInsightResponse,
 } from '../types';
 import { getSessionId, storeSessionId } from '../utils/storage';
 
@@ -139,10 +140,74 @@ export async function chatAboutHealth(options: ChatOptions): Promise<ChatRespons
   });
 }
 
+export interface DailyInsightOptions {
+  provider: LLMProvider;
+  apiKey: string;
+  healthData: GarminHealthData;
+  model?: string;
+}
+
+export async function generateDailyInsight(options: DailyInsightOptions): Promise<DailyInsightResponse> {
+  return apiFetch<DailyInsightResponse>('/analyze/daily-insight', {
+    method: 'POST',
+    body: JSON.stringify({
+      provider: options.provider,
+      apiKey: options.apiKey,
+      healthData: options.healthData,
+      model: options.model,
+    }),
+  });
+}
+
 // ============================================================================
 // Health Check
 // ============================================================================
 
 export async function checkApiHealth(): Promise<{ status: string; timestamp: string }> {
   return apiFetch<{ status: string; timestamp: string }>('/health');
+}
+
+// ============================================================================
+// Cloud Sync API
+// ============================================================================
+
+export interface CloudUserSettings {
+  provider: 'openai' | 'anthropic' | 'google';
+  model: string;
+  apiKeys: {
+    openai?: string;
+    anthropic?: string;
+    google?: string;
+  };
+}
+
+export interface CloudUserData {
+  settings?: CloudUserSettings;
+  lifeContexts?: unknown[];
+  updatedAt?: string;
+}
+
+export async function checkSyncStatus(): Promise<{ enabled: boolean }> {
+  return apiFetch<{ enabled: boolean }>('/user/sync-status');
+}
+
+export async function fetchCloudUserData(userId: string): Promise<CloudUserData> {
+  return apiFetch<CloudUserData>('/user/data', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function saveCloudSettings(userId: string, settings: CloudUserSettings): Promise<void> {
+  await apiFetch('/user/settings', {
+    method: 'POST',
+    body: JSON.stringify({ userId, settings }),
+  });
+}
+
+export async function saveCloudLifeContexts(userId: string, lifeContexts: unknown[]): Promise<void> {
+  await apiFetch('/user/life-contexts', {
+    method: 'POST',
+    body: JSON.stringify({ userId, lifeContexts }),
+  });
 }

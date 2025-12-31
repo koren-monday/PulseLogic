@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Brain, Sparkles, RefreshCw, ChevronLeft, Copy, Check, Cpu, Send, MessageCircle, User, Bot } from 'lucide-react';
-import { useAnalysis, useChat, useModelRegistry } from '../hooks';
+import { Brain, Sparkles, RefreshCw, ChevronLeft, Copy, Check, Cpu, Send, MessageCircle, User, Bot, CheckCircle } from 'lucide-react';
+import { useAnalysis, useChat, useModelRegistry, useSaveReport } from '../hooks';
 import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { LifeContextSelector } from '../components/LifeContextSelector';
-import type { UserSettings } from '../utils/storage';
+import { getCurrentUserId, getLifeContexts, storeLifeContexts, type UserSettings } from '../utils/storage';
+import { pushLifeContextsToCloud } from '../services/sync.service';
 import type { GarminHealthData, LLMProvider, AnalysisResponse, ChatMessage, LifeContext } from '../types';
 
 interface AnalysisStepProps {
@@ -27,9 +28,14 @@ export function AnalysisStep({
   const [activeProvider, setActiveProvider] = useState<LLMProvider>(selectedProvider);
   const [activeModel, setActiveModel] = useState<string>(selectedModel);
   const [customPrompt, setCustomPrompt] = useState('');
-  const [lifeContexts, setLifeContexts] = useState<LifeContext[]>([]);
+  const [lifeContexts, setLifeContexts] = useState<LifeContext[]>(() => {
+    // Load saved life contexts on mount
+    const userId = getCurrentUserId();
+    return userId ? getLifeContexts(userId) : [];
+  });
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [copied, setCopied] = useState(false);
+  const [savedReportId, setSavedReportId] = useState<string | null>(null);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -39,6 +45,7 @@ export function AnalysisStep({
   const { data: modelRegistry, isLoading: modelsLoading } = useModelRegistry();
   const analysisMutation = useAnalysis();
   const chatMutation = useChat();
+  const saveReportMutation = useSaveReport();
 
   // Update active model when provider changes
   useEffect(() => {
@@ -51,6 +58,16 @@ export function AnalysisStep({
       }
     }
   }, [activeProvider, modelRegistry, activeModel]);
+
+  // Persist life contexts when they change
+  useEffect(() => {
+    const userId = getCurrentUserId();
+    if (userId) {
+      storeLifeContexts(userId, lifeContexts);
+      // Sync to cloud in background
+      pushLifeContextsToCloud(userId, lifeContexts);
+    }
+  }, [lifeContexts]);
 
   const handleAnalyze = async () => {
     const apiKey = userSettings.apiKeys[activeProvider];
@@ -69,6 +86,21 @@ export function AnalysisStep({
         lifeContexts: lifeContexts.length > 0 ? lifeContexts : undefined,
       });
       setAnalysis(result);
+      setSavedReportId(null); // Reset saved status for new analysis
+
+      // Auto-save if we have structured data
+      if (result.structured) {
+        const reportId = await saveReportMutation.mutateAsync({
+          dateRange: healthData.dateRange,
+          provider: activeProvider,
+          model: activeModel,
+          markdown: result.analysis,
+          structured: result.structured,
+          healthData,
+          lifeContexts: lifeContexts.length > 0 ? lifeContexts : undefined,
+        });
+        setSavedReportId(reportId);
+      }
     } catch {
       // Error handled by mutation
     }
@@ -238,6 +270,12 @@ export function AnalysisStep({
               <h3 className="font-semibold">Conversation</h3>
             </div>
             <div className="flex items-center gap-2">
+              {savedReportId && (
+                <span className="flex items-center gap-1 text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded">
+                  <CheckCircle className="w-3 h-3" />
+                  Saved
+                </span>
+              )}
               <span className="text-xs text-slate-500">
                 {activeModel}
               </span>

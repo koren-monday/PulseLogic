@@ -1,13 +1,15 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
-import { analyzeHealthData, chatAboutHealth } from '../services/llm/llm.service.js';
+import { analyzeHealthData, chatAboutHealth, generateDailyInsight } from '../services/llm/llm.service.js';
 import { MODEL_REGISTRY } from '../services/llm/models.js';
 import { validate } from '../middleware/index.js';
 import {
   AnalyzeRequestSchema,
   ChatRequestSchema,
+  DailyInsightRequestSchema,
   type ApiResponse,
   type AnalysisResponse,
   type ChatResponse,
+  type DailyInsightResponse,
   type LLMProvider,
 } from '../types/index.js';
 
@@ -50,6 +52,7 @@ router.post(
           provider: result.provider,
           model: result.model,
           analysis: result.content,
+          structured: result.structured,
           tokensUsed: result.tokensUsed,
         },
       });
@@ -85,6 +88,40 @@ router.post(
           model: result.model,
           message: result.content,
           tokensUsed: result.tokensUsed,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/analyze/daily-insight
+ * Generate a quick daily insight comparing the last day to period averages
+ */
+router.post(
+  '/daily-insight',
+  validate(DailyInsightRequestSchema),
+  async (req: Request, res: Response<ApiResponse<DailyInsightResponse>>, next: NextFunction) => {
+    try {
+      const { provider, apiKey, healthData, model } = req.body;
+
+      const result = await generateDailyInsight({
+        provider: provider as LLMProvider,
+        apiKey,
+        healthData,
+        model,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          provider: result.provider,
+          model: result.model,
+          insight: result.insight,
+          tokensUsed: result.tokensUsed,
+          error: result.error,
         },
       });
     } catch (error) {

@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import type { StructuredAnalysis } from './structured-analysis.js';
+
+// Re-export structured analysis types
+export * from './structured-analysis.js';
 
 // ============================================================================
 // Garmin Types
@@ -198,6 +202,7 @@ export interface AnalysisResponse {
   provider: LLMProvider;
   model: string;
   analysis: string;
+  structured?: StructuredAnalysis;
   tokensUsed?: number;
 }
 
@@ -220,6 +225,42 @@ export interface ChatResponse {
   model: string;
   message: string;
   tokensUsed?: number;
+}
+
+// Daily Insight types - separate LLM call for comparing last day to averages
+export interface DailyInsightComparison {
+  metric: 'sleep' | 'stress' | 'heartRate' | 'bodyBattery' | 'activity';
+  lastDayValue: string;
+  periodAverage: string;
+  trend: 'better' | 'worse' | 'same';
+  insight: string;
+}
+
+export interface DailyInsightData {
+  lastDay: {
+    date: string;
+    summary: string;
+  };
+  comparisons: DailyInsightComparison[];
+  headline: string;
+  topInsight: string;
+  quickTips: string[];
+  moodEmoji: string;
+}
+
+export interface DailyInsightRequest {
+  provider: LLMProvider;
+  apiKey: string;
+  healthData: GarminHealthData;
+  model?: string;
+}
+
+export interface DailyInsightResponse {
+  provider: LLMProvider;
+  model: string;
+  insight: DailyInsightData | null;
+  tokensUsed?: number;
+  error?: string;
 }
 
 // ============================================================================
@@ -281,6 +322,23 @@ export const ChatRequestSchema = z.object({
   }),
   model: z.string().optional(),
   messages: z.array(ChatMessageSchema).min(1, 'At least one message required'),
+});
+
+export const DailyInsightRequestSchema = z.object({
+  provider: z.enum(['openai', 'anthropic', 'google']),
+  apiKey: z.string().min(1, 'API key required'),
+  healthData: z.object({
+    dateRange: z.object({
+      start: z.string(),
+      end: z.string(),
+    }),
+    sleep: z.array(z.any()),
+    stress: z.array(z.any()),
+    bodyBattery: z.array(z.any()),
+    activities: z.array(z.any()),
+    heartRate: z.array(z.any()),
+  }),
+  model: z.string().optional(),
 });
 
 // ============================================================================

@@ -139,3 +139,35 @@ export function storeCurrentUserId(userId: string): void {
 export function getCurrentUserId(): string | null {
   return localStorage.getItem(`${STORAGE_KEY_PREFIX}current_user`);
 }
+
+// ============================================================================
+// Life Context Storage (persisted per user for analysis defaults)
+// ============================================================================
+
+import type { LifeContext } from '../types';
+
+function getLifeContextsKey(userId: string): string {
+  return `${STORAGE_KEY_PREFIX}life_contexts_${userId}`;
+}
+
+export function storeLifeContexts(userId: string, contexts: LifeContext[]): void {
+  const key = getLifeContextsKey(userId);
+  localStorage.setItem(key, JSON.stringify(contexts));
+}
+
+export function getLifeContexts(userId: string): LifeContext[] {
+  const key = getLifeContextsKey(userId);
+  const stored = localStorage.getItem(key);
+  if (!stored) return [];
+
+  try {
+    return JSON.parse(stored) as LifeContext[];
+  } catch {
+    return [];
+  }
+}
+
+export function clearLifeContexts(userId: string): void {
+  const key = getLifeContextsKey(userId);
+  localStorage.removeItem(key);
+}

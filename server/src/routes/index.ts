@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import garminRoutes from './garmin.routes.js';
 import analyzeRoutes from './analyze.routes.js';
+import userRoutes from './user.routes.js';
 
 const router = Router();
 
@@ -12,5 +13,6 @@ router.get('/health', (_req, res) => {
 // Mount route groups
 router.use('/garmin', garminRoutes);
 router.use('/analyze', analyzeRoutes);
+router.use('/user', userRoutes);
 
 export default router;

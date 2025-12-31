@@ -1,3 +1,8 @@
+// Import and re-export structured analysis types
+import type { StructuredAnalysis } from './structured-analysis';
+export * from './structured-analysis';
+export type { StructuredAnalysis };
+
 // ============================================================================
 // Garmin Types (mirrored from server)
 // ============================================================================
@@ -226,6 +231,7 @@ export interface AnalysisResponse {
   provider: LLMProvider;
   model: string;
   analysis: string;
+  structured?: StructuredAnalysis;
   tokensUsed?: number;
 }
 
@@ -248,6 +254,35 @@ export interface ChatResponse {
   model: string;
   message: string;
   tokensUsed?: number;
+}
+
+// Daily Insight types - separate LLM call for comparing last day to averages
+export interface DailyInsightComparison {
+  metric: 'sleep' | 'stress' | 'heartRate' | 'bodyBattery' | 'activity';
+  lastDayValue: string;
+  periodAverage: string;
+  trend: 'better' | 'worse' | 'same';
+  insight: string;
+}
+
+export interface DailyInsightData {
+  lastDay: {
+    date: string;
+    summary: string;
+  };
+  comparisons: DailyInsightComparison[];
+  headline: string;
+  topInsight: string;
+  quickTips: string[];
+  moodEmoji: string;
+}
+
+export interface DailyInsightResponse {
+  provider: LLMProvider;
+  model: string;
+  insight: DailyInsightData | null;
+  tokensUsed?: number;
+  error?: string;
 }
 
 // ============================================================================

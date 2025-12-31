@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { analyzeHealthData, chatAboutHealth, fetchModelRegistry } from '../services/api';
+import { analyzeHealthData, chatAboutHealth, fetchModelRegistry, generateDailyInsight } from '../services/api';
 import type { GarminHealthData, LLMProvider, ChatMessage, LifeContext } from '../types';
 
 interface AnalyzeParams {
@@ -50,6 +50,25 @@ export function useChat() {
         healthData,
         model,
         messages,
+      }),
+  });
+}
+
+interface DailyInsightParams {
+  provider: LLMProvider;
+  apiKey: string;
+  healthData: GarminHealthData;
+  model?: string;
+}
+
+export function useDailyInsightGeneration() {
+  return useMutation({
+    mutationFn: ({ provider, apiKey, healthData, model }: DailyInsightParams) =>
+      generateDailyInsight({
+        provider,
+        apiKey,
+        healthData,
+        model,
       }),
   });
 }

@@ -11,11 +11,17 @@ import {
 import { useGarminData } from '../hooks';
 import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import type { GarminHealthData } from '../types';
+import { DailyInsight } from '../components/DailyInsight';
+import { QuickDailyInsight } from '../components/QuickDailyInsight';
+import { ActionTracker } from '../components/ActionTracker';
+import { TrendComparison } from '../components/TrendComparison';
+import type { GarminHealthData, LLMProvider } from '../types';
+import type { UserSettings } from '../utils/storage';
 
 interface DataStepProps {
   onComplete: (data: GarminHealthData) => void;
   onBack: () => void;
+  userSettings: UserSettings;
 }
 
 function formatDuration(seconds: number): string {
@@ -24,7 +30,7 @@ function formatDuration(seconds: number): string {
   return `${hours}h ${minutes}m`;
 }
 
-export function DataStep({ onComplete, onBack }: DataStepProps) {
+export function DataStep({ onComplete, onBack, userSettings }: DataStepProps) {
   const [days, setDays] = useState(7);
   const fetchMutation = useGarminData(days);
 
@@ -39,8 +45,31 @@ export function DataStep({ onComplete, onBack }: DataStepProps) {
 
   const data = fetchMutation.data;
 
+  // Get the first available provider with an API key for quick insight
+  const getAvailableProvider = (): { provider: LLMProvider; apiKey: string } | null => {
+    const providers: LLMProvider[] = ['openai', 'anthropic', 'google'];
+    for (const provider of providers) {
+      const apiKey = userSettings.apiKeys[provider];
+      if (apiKey) {
+        return { provider, apiKey };
+      }
+    }
+    return null;
+  };
+
+  const availableProvider = getAvailableProvider();
+
   return (
     <div className="space-y-6">
+      {/* Daily Insight from saved reports */}
+      <DailyInsight />
+
+      {/* Engagement Widgets Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ActionTracker compact />
+        <TrendComparison compact />
+      </div>
+
       {/* Fetch Controls */}
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
@@ -84,6 +113,16 @@ export function DataStep({ onComplete, onBack }: DataStepProps) {
       {/* Data Preview */}
       {data && (
         <div className="space-y-4">
+          {/* Quick Daily Insight - LLM-generated comparison of last day vs averages */}
+          {availableProvider && (
+            <QuickDailyInsight
+              healthData={data}
+              provider={availableProvider.provider}
+              apiKey={availableProvider.apiKey}
+              model={userSettings.selectedModel}
+            />
+          )}
+
           <h3 className="text-lg font-semibold">
             Data Retrieved: {data.dateRange.start} to {data.dateRange.end}
           </h3>

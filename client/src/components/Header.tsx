@@ -1,12 +1,15 @@
-import { Activity, Settings, LogOut, User } from 'lucide-react';
+import { Activity, Settings, LogOut, User, History, Target, TrendingUp } from 'lucide-react';
 
 interface HeaderProps {
   displayName?: string;
   onSettingsClick?: () => void;
+  onHistoryClick?: () => void;
+  onActionsClick?: () => void;
+  onTrendsClick?: () => void;
   onLogout?: () => void;
 }
 
-export function Header({ displayName, onSettingsClick, onLogout }: HeaderProps) {
+export function Header({ displayName, onSettingsClick, onHistoryClick, onActionsClick, onTrendsClick, onLogout }: HeaderProps) {
   const isLoggedIn = !!displayName;
 
   return (
@@ -26,6 +29,39 @@ export function Header({ displayName, onSettingsClick, onLogout }: HeaderProps) 
             <User className="w-4 h-4" />
             <span className="text-sm hidden sm:inline">{displayName}</span>
           </div>
+
+          {/* History Button */}
+          {onHistoryClick && (
+            <button
+              onClick={onHistoryClick}
+              className="p-2 text-slate-400 hover:text-garmin-blue hover:bg-slate-700 rounded-lg transition-colors"
+              title="Report History"
+            >
+              <History className="w-5 h-5" />
+            </button>
+          )}
+
+          {/* Actions Button */}
+          {onActionsClick && (
+            <button
+              onClick={onActionsClick}
+              className="p-2 text-slate-400 hover:text-green-400 hover:bg-slate-700 rounded-lg transition-colors"
+              title="Action Tracker"
+            >
+              <Target className="w-5 h-5" />
+            </button>
+          )}
+
+          {/* Trends Button */}
+          {onTrendsClick && (
+            <button
+              onClick={onTrendsClick}
+              className="p-2 text-slate-400 hover:text-yellow-400 hover:bg-slate-700 rounded-lg transition-colors"
+              title="Trend Analysis"
+            >
+              <TrendingUp className="w-5 h-5" />
+            </button>
+          )}
 
           {/* Settings Button */}
           {onSettingsClick && (

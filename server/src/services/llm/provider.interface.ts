@@ -97,7 +97,89 @@ Any trends that suggest overtraining, chronic stress, or recovery deficits.
 ### 📈 What's Working Well
 Acknowledge positive patterns to reinforce good behaviors.
 
-Use specific numbers and dates throughout. Be direct and insightful, not generic.`;
+Use specific numbers and dates throughout. Be direct and insightful, not generic.
+
+## REQUIRED: Structured Data Output
+
+After your markdown analysis, you MUST include a JSON block with structured data for tracking and visualization.
+The JSON block must be enclosed in triple backticks with the label \`json:structured-analysis\`.
+
+Generate unique IDs for each item (e.g., "anomaly-1", "rec-1", "insight-1").
+
+Calculate health scores (0-100) where:
+- overallScore: Weighted average of all metrics
+- sleepScore: Based on sleep duration, quality, architecture
+- stressScore: Inverted stress level (100 = lowest stress, 0 = highest stress)
+- recoveryScore: Based on Body Battery patterns and HR recovery
+- activityScore: Based on activity consistency and appropriate intensity
+
+\`\`\`json:structured-analysis
+{
+  "version": "1.0",
+  "generatedAt": "<current ISO timestamp>",
+  "dateRange": { "start": "<data start date>", "end": "<data end date>" },
+  "executiveSummary": [
+    "<TL;DR bullet 1>",
+    "<TL;DR bullet 2>",
+    "<TL;DR bullet 3>"
+  ],
+  "metrics": {
+    "overallScore": <0-100>,
+    "sleepScore": <0-100>,
+    "stressScore": <0-100>,
+    "recoveryScore": <0-100>,
+    "activityScore": <0-100>
+  },
+  "anomalies": [
+    {
+      "id": "<unique-id>",
+      "date": "<YYYY-MM-DD>",
+      "metric": "sleep|stress|heartRate|bodyBattery|activity",
+      "severity": "info|warning|critical",
+      "title": "<short title>",
+      "description": "<what was observed and likely cause>",
+      "value": "<observed value as string>",
+      "expectedRange": "<normal range>"
+    }
+  ],
+  "patterns": [
+    {
+      "id": "<unique-id>",
+      "type": "positive|negative|neutral",
+      "description": "<pattern description>",
+      "correlation": "<cause → effect if applicable>",
+      "frequency": "<how often observed>"
+    }
+  ],
+  "recommendations": [
+    {
+      "id": "<unique-id>",
+      "text": "<actionable recommendation>",
+      "priority": "high|medium|low",
+      "category": "sleep|stress|activity|recovery|lifestyle",
+      "evidence": "<specific data that prompted this>",
+      "actionType": "habit|avoid|timing|goal",
+      "trackingType": "daily|weekly|one-time",
+      "suggestedDuration": <number of days or null>
+    }
+  ],
+  "achievements": [
+    "<positive observation 1>",
+    "<positive observation 2>"
+  ],
+  "insights": [
+    {
+      "id": "<unique-id>",
+      "text": "<bite-sized insight for daily engagement>",
+      "category": "tip|observation|achievement|warning",
+      "actionable": true|false,
+      "relatedRecommendationId": "<recommendation id or null>"
+    }
+  ]
+}
+\`\`\`
+
+Generate 3-5 insights that can be shown one per day to keep the user engaged. Make them specific and personalized to their data.`;
 }
 
 /**
@@ -301,6 +383,113 @@ ${customPrompt}`;
  * Build the system prompt for follow-up chat conversations.
  * Includes the health data as context so follow-up questions can reference it.
  */
+/**
+ * Build the system prompt for daily insight generation.
+ * Focuses on comparing the most recent day's data to overall averages.
+ */
+export function buildDailyInsightSystemPrompt(): string {
+  return `You are a concise health analyst providing a quick "daily snapshot" insight.
+
+Your job is to compare the LAST DAY's metrics against the OVERALL AVERAGES from the full period, and provide 2-3 brief, actionable insights.
+
+## Output Format
+
+You must respond with a JSON object (no markdown, just valid JSON):
+
+\`\`\`json
+{
+  "lastDay": {
+    "date": "<YYYY-MM-DD>",
+    "summary": "<one sentence summary of the day>"
+  },
+  "comparisons": [
+    {
+      "metric": "sleep|stress|heartRate|bodyBattery|activity",
+      "lastDayValue": "<value or description>",
+      "periodAverage": "<value or description>",
+      "trend": "better|worse|same",
+      "insight": "<brief explanation of what this means>"
+    }
+  ],
+  "headline": "<catchy 5-10 word headline for the day>",
+  "topInsight": "<1-2 sentence main takeaway comparing last day to averages>",
+  "quickTips": [
+    "<actionable tip 1>",
+    "<actionable tip 2>"
+  ],
+  "moodEmoji": "🎉|😊|😐|😟|😴"
+}
+\`\`\`
+
+## Guidelines
+- Be BRIEF and SPECIFIC
+- Focus on what's DIFFERENT about the last day compared to averages
+- Use actual numbers from the data
+- Make tips actionable and relevant to the comparison
+- Choose emoji that matches the overall day quality`;
+}
+
+/**
+ * Build the user prompt for daily insight generation.
+ * Provides both the last day's data and period averages.
+ */
+export function buildDailyInsightUserPrompt(healthData: GarminHealthData): string {
+  // Get the last day's data
+  const lastSleep = healthData.sleep[0]; // Most recent
+  const lastStress = healthData.stress[0];
+  const lastBodyBattery = healthData.bodyBattery[0];
+  const lastHeartRate = healthData.heartRate[0];
+
+  // Get activities from the last day
+  const lastDate = healthData.dateRange.end;
+  const lastDayActivities = healthData.activities.filter(a =>
+    a.startTimeLocal?.startsWith(lastDate)
+  );
+
+  // Calculate averages for the period (excluding last day)
+  const calcAvg = <T>(arr: T[], getValue: (item: T) => number | null): number | null => {
+    const values = arr.slice(1).map(getValue).filter((v): v is number => v !== null);
+    if (values.length === 0) return null;
+    return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+  };
+
+  const avgSleepSeconds = calcAvg(healthData.sleep, s => s.sleepTimeSeconds);
+  const avgSleepScore = calcAvg(healthData.sleep, s => s.sleepScore);
+  const avgStress = calcAvg(healthData.stress, s => s.overallStressLevel);
+  const avgRestingHR = calcAvg(healthData.heartRate, h => h.restingHeartRate);
+  const avgBodyBatteryCharge = calcAvg(healthData.bodyBattery, b => b.charged);
+
+  return `Compare the LAST DAY to the PERIOD AVERAGES:
+
+## Last Day (${lastDate})
+
+### Sleep
+${lastSleep ? JSON.stringify(lastSleep, null, 2) : 'No sleep data'}
+
+### Stress
+${lastStress ? JSON.stringify(lastStress, null, 2) : 'No stress data'}
+
+### Body Battery
+${lastBodyBattery ? JSON.stringify(lastBodyBattery, null, 2) : 'No body battery data'}
+
+### Heart Rate
+${lastHeartRate ? JSON.stringify(lastHeartRate, null, 2) : 'No heart rate data'}
+
+### Activities (${lastDayActivities.length} activities)
+${lastDayActivities.length > 0 ? JSON.stringify(lastDayActivities, null, 2) : 'No activities'}
+
+## Period Averages (${healthData.dateRange.start} to ${healthData.dateRange.end})
+
+- Average Sleep Duration: ${avgSleepSeconds ? Math.round(avgSleepSeconds / 3600 * 10) / 10 + ' hours' : 'N/A'}
+- Average Sleep Score: ${avgSleepScore ?? 'N/A'}
+- Average Stress Level: ${avgStress ?? 'N/A'}
+- Average Resting HR: ${avgRestingHR ? avgRestingHR + ' bpm' : 'N/A'}
+- Average Body Battery Charged: ${avgBodyBatteryCharge ?? 'N/A'}
+- Total Activities in Period: ${healthData.activities.length}
+
+Generate your daily insight comparison now. Remember: respond with ONLY the JSON object, no markdown formatting around it.`;
+}
+
 export function buildChatSystemPrompt(healthData: GarminHealthData): string {
   return `You are an expert sports scientist and health analyst having a follow-up conversation about a user's Garmin health data.
 
