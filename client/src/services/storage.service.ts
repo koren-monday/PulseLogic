@@ -16,6 +16,13 @@ import type {
   LifeContext,
   LLMProvider,
 } from '../types';
+import { getCurrentUserId } from '../utils/storage';
+import {
+  pushReportToCloud,
+  pushActionsToCloud,
+  pushActionUpdateToCloud,
+  deleteReportFromCloud,
+} from './sync.service';
 
 // ============================================================================
 // Report Operations
@@ -46,10 +53,19 @@ export async function saveReport(params: {
   await queueInsights(id, params.structured.insights);
 
   // Create action items from trackable recommendations
-  await createActionsFromRecommendations(id, params.structured.recommendations);
+  const actions = await createActionsFromRecommendations(id, params.structured.recommendations);
 
   // Update user progress
   await incrementReportCount(id);
+
+  // Sync to cloud in background (excludes healthData for privacy)
+  const userId = getCurrentUserId();
+  if (userId) {
+    pushReportToCloud(userId, savedReport);
+    if (actions.length > 0) {
+      pushActionsToCloud(userId, actions);
+    }
+  }
 
   return id;
 }
@@ -73,6 +89,12 @@ export async function deleteReport(id: string): Promise<void> {
     db.insights.where('reportId').equals(id).delete(),
     db.metrics.where('reportId').equals(id).delete(),
   ]);
+
+  // Delete from cloud in background
+  const userId = getCurrentUserId();
+  if (userId) {
+    deleteReportFromCloud(userId, id);
+  }
 }
 
 // ============================================================================
@@ -82,7 +104,7 @@ export async function deleteReport(id: string): Promise<void> {
 async function createActionsFromRecommendations(
   reportId: string,
   recommendations: Recommendation[]
-): Promise<void> {
+): Promise<TrackedAction[]> {
   const trackableRecs = recommendations.filter((r) => r.trackingType !== null);
 
   const actions: TrackedAction[] = trackableRecs.map((rec) => ({
@@ -99,6 +121,8 @@ async function createActionsFromRecommendations(
   if (actions.length > 0) {
     await db.actions.bulkAdd(actions);
   }
+
+  return actions;
 }
 
 export async function getActiveActions(): Promise<TrackedAction[]> {
@@ -138,36 +162,70 @@ export async function logActionProgress(
   const newStreak = completed ? action.currentStreak + 1 : 0;
   const longestStreak = Math.max(action.longestStreak, newStreak);
 
-  await db.actions.update(actionId, {
+  const updates = {
     trackingHistory: action.trackingHistory,
     currentStreak: newStreak,
     longestStreak,
-  });
+  };
+
+  await db.actions.update(actionId, updates);
+
+  // Sync to cloud
+  const userId = getCurrentUserId();
+  if (userId) {
+    pushActionUpdateToCloud(userId, actionId, updates);
+  }
 }
 
 export async function completeAction(actionId: string): Promise<void> {
-  await db.actions.update(actionId, {
-    status: 'completed',
+  const updates = {
+    status: 'completed' as const,
     completedAt: new Date().toISOString(),
-  });
+  };
+
+  await db.actions.update(actionId, updates);
 
   // Update user progress
   const progress = await getProgress();
   await db.progress.update('singleton', {
     actionsCompleted: progress.actionsCompleted + 1,
   });
+
+  // Sync to cloud
+  const userId = getCurrentUserId();
+  if (userId) {
+    pushActionUpdateToCloud(userId, actionId, updates);
+  }
 }
 
 export async function dismissAction(actionId: string): Promise<void> {
   await db.actions.update(actionId, { status: 'dismissed' });
+
+  // Sync to cloud
+  const userId = getCurrentUserId();
+  if (userId) {
+    pushActionUpdateToCloud(userId, actionId, { status: 'dismissed' });
+  }
 }
 
 export async function snoozeAction(actionId: string): Promise<void> {
   await db.actions.update(actionId, { status: 'snoozed' });
+
+  // Sync to cloud
+  const userId = getCurrentUserId();
+  if (userId) {
+    pushActionUpdateToCloud(userId, actionId, { status: 'snoozed' });
+  }
 }
 
 export async function reactivateAction(actionId: string): Promise<void> {
   await db.actions.update(actionId, { status: 'active' });
+
+  // Sync to cloud
+  const userId = getCurrentUserId();
+  if (userId) {
+    pushActionUpdateToCloud(userId, actionId, { status: 'active' });
+  }
 }
 
 // ============================================================================

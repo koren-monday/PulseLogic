@@ -16,7 +16,7 @@ import {
   clearSession,
   type UserSettings,
 } from './utils/storage';
-import { syncOnLogin, pushSettingsToCloud } from './services/sync.service';
+import { syncOnLogin, pushSettingsToCloud, syncReportsAndActionsOnLogin } from './services/sync.service';
 import type { GarminHealthData } from './types';
 import type { SavedReport } from './db/schema';
 
@@ -61,6 +61,9 @@ function App() {
     const syncedSettings = await syncOnLogin(newUserId);
     setUserSettings(syncedSettings);
     setIsLoggedIn(true);
+
+    // Sync reports and actions from cloud in background
+    syncReportsAndActionsOnLogin(newUserId);
 
     // Check if user has API key configured, if not show settings
     const hasApiKey = Object.values(syncedSettings.apiKeys).some(Boolean);

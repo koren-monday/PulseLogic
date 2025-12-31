@@ -135,3 +135,248 @@ export async function saveUserData(userId: string, data: UserData): Promise<bool
 export function isFirestoreEnabled(): boolean {
   return getDb() !== null;
 }
+
+// ============================================================================
+// Reports Subcollection
+// ============================================================================
+
+export interface CloudReport {
+  id: string;
+  createdAt: string;
+  dateRange: { start: string; end: string };
+  provider: string;
+  model: string;
+  markdown: string;
+  structured: unknown; // StructuredAnalysis - kept as unknown for flexibility
+  lifeContexts?: LifeContext[];
+  // NOTE: healthData is intentionally excluded for privacy
+}
+
+export async function saveReport(userId: string, report: CloudReport): Promise<boolean> {
+  const firestore = getDb();
+  if (!firestore) return false;
+
+  try {
+    await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('reports')
+      .doc(report.id)
+      .set({
+        ...report,
+        updatedAt: new Date().toISOString(),
+      });
+    return true;
+  } catch (error) {
+    console.error('Failed to save report:', error);
+    return false;
+  }
+}
+
+export async function getReports(userId: string, limit = 20): Promise<CloudReport[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+
+  try {
+    const snapshot = await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('reports')
+      .orderBy('createdAt', 'desc')
+      .limit(limit)
+      .get();
+
+    return snapshot.docs.map(doc => doc.data() as CloudReport);
+  } catch (error) {
+    console.error('Failed to get reports:', error);
+    return [];
+  }
+}
+
+export async function getReport(userId: string, reportId: string): Promise<CloudReport | null> {
+  const firestore = getDb();
+  if (!firestore) return null;
+
+  try {
+    const doc = await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('reports')
+      .doc(reportId)
+      .get();
+
+    if (!doc.exists) return null;
+    return doc.data() as CloudReport;
+  } catch (error) {
+    console.error('Failed to get report:', error);
+    return null;
+  }
+}
+
+export async function deleteReport(userId: string, reportId: string): Promise<boolean> {
+  const firestore = getDb();
+  if (!firestore) return false;
+
+  try {
+    // Delete report
+    await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('reports')
+      .doc(reportId)
+      .delete();
+
+    // Delete associated actions
+    const actionsSnapshot = await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('actions')
+      .where('reportId', '==', reportId)
+      .get();
+
+    const batch = firestore.batch();
+    actionsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+
+    return true;
+  } catch (error) {
+    console.error('Failed to delete report:', error);
+    return false;
+  }
+}
+
+// ============================================================================
+// Actions Subcollection
+// ============================================================================
+
+export interface CloudAction {
+  id: string;
+  reportId: string;
+  recommendation: {
+    id: string;
+    text: string;
+    priority: string;
+    category: string;
+    evidence: string;
+    actionType: string;
+    trackingType: string | null;
+    suggestedDuration?: number;
+  };
+  status: 'active' | 'completed' | 'dismissed' | 'snoozed';
+  createdAt: string;
+  completedAt?: string;
+  trackingHistory: {
+    date: string;
+    completed: boolean;
+    notes?: string;
+  }[];
+  currentStreak: number;
+  longestStreak: number;
+}
+
+export async function saveAction(userId: string, action: CloudAction): Promise<boolean> {
+  const firestore = getDb();
+  if (!firestore) return false;
+
+  try {
+    await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('actions')
+      .doc(action.id)
+      .set({
+        ...action,
+        updatedAt: new Date().toISOString(),
+      });
+    return true;
+  } catch (error) {
+    console.error('Failed to save action:', error);
+    return false;
+  }
+}
+
+export async function saveActions(userId: string, actions: CloudAction[]): Promise<boolean> {
+  const firestore = getDb();
+  if (!firestore) return false;
+
+  try {
+    const batch = firestore.batch();
+    const actionsRef = firestore.collection('users').doc(userId).collection('actions');
+
+    actions.forEach(action => {
+      batch.set(actionsRef.doc(action.id), {
+        ...action,
+        updatedAt: new Date().toISOString(),
+      });
+    });
+
+    await batch.commit();
+    return true;
+  } catch (error) {
+    console.error('Failed to save actions:', error);
+    return false;
+  }
+}
+
+export async function getActions(userId: string): Promise<CloudAction[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+
+  try {
+    const snapshot = await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('actions')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    return snapshot.docs.map(doc => doc.data() as CloudAction);
+  } catch (error) {
+    console.error('Failed to get actions:', error);
+    return [];
+  }
+}
+
+export async function getActiveActions(userId: string): Promise<CloudAction[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+
+  try {
+    const snapshot = await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('actions')
+      .where('status', '==', 'active')
+      .get();
+
+    return snapshot.docs.map(doc => doc.data() as CloudAction);
+  } catch (error) {
+    console.error('Failed to get active actions:', error);
+    return [];
+  }
+}
+
+export async function updateAction(
+  userId: string,
+  actionId: string,
+  updates: Partial<CloudAction>
+): Promise<boolean> {
+  const firestore = getDb();
+  if (!firestore) return false;
+
+  try {
+    await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('actions')
+      .doc(actionId)
+      .update({
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      });
+    return true;
+  } catch (error) {
+    console.error('Failed to update action:', error);
+    return false;
+  }
+}

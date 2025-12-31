@@ -211,3 +211,108 @@ export async function saveCloudLifeContexts(userId: string, lifeContexts: unknow
     body: JSON.stringify({ userId, lifeContexts }),
   });
 }
+
+// ============================================================================
+// Cloud Reports API
+// ============================================================================
+
+export interface CloudReport {
+  id: string;
+  createdAt: string;
+  dateRange: { start: string; end: string };
+  provider: string;
+  model: string;
+  markdown: string;
+  structured: unknown;
+  lifeContexts?: LifeContext[];
+  // NOTE: healthData is intentionally excluded for privacy
+}
+
+export async function fetchCloudReports(userId: string, limit = 20): Promise<CloudReport[]> {
+  return apiFetch<CloudReport[]>('/user/reports', {
+    method: 'POST',
+    body: JSON.stringify({ userId, limit }),
+  });
+}
+
+export async function fetchCloudReport(userId: string, reportId: string): Promise<CloudReport | null> {
+  return apiFetch<CloudReport | null>('/user/reports/get', {
+    method: 'POST',
+    body: JSON.stringify({ userId, reportId }),
+  });
+}
+
+export async function saveCloudReport(userId: string, report: CloudReport): Promise<void> {
+  await apiFetch('/user/reports/save', {
+    method: 'POST',
+    body: JSON.stringify({ userId, report }),
+  });
+}
+
+export async function deleteCloudReport(userId: string, reportId: string): Promise<void> {
+  await apiFetch('/user/reports/delete', {
+    method: 'POST',
+    body: JSON.stringify({ userId, reportId }),
+  });
+}
+
+// ============================================================================
+// Cloud Actions API
+// ============================================================================
+
+export interface CloudAction {
+  id: string;
+  reportId: string;
+  recommendation: {
+    id: string;
+    text: string;
+    priority: string;
+    category: string;
+    evidence: string;
+    actionType: string;
+    trackingType: string | null;
+    suggestedDuration?: number;
+  };
+  status: 'active' | 'completed' | 'dismissed' | 'snoozed';
+  createdAt: string;
+  completedAt?: string;
+  trackingHistory: {
+    date: string;
+    completed: boolean;
+    notes?: string;
+  }[];
+  currentStreak: number;
+  longestStreak: number;
+}
+
+export async function fetchCloudActions(userId: string): Promise<CloudAction[]> {
+  return apiFetch<CloudAction[]>('/user/actions', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function saveCloudAction(userId: string, action: CloudAction): Promise<void> {
+  await apiFetch('/user/actions/save', {
+    method: 'POST',
+    body: JSON.stringify({ userId, action }),
+  });
+}
+
+export async function saveCloudActions(userId: string, actions: CloudAction[]): Promise<void> {
+  await apiFetch('/user/actions/save-bulk', {
+    method: 'POST',
+    body: JSON.stringify({ userId, actions }),
+  });
+}
+
+export async function updateCloudAction(
+  userId: string,
+  actionId: string,
+  updates: Partial<CloudAction>
+): Promise<void> {
+  await apiFetch('/user/actions/update', {
+    method: 'POST',
+    body: JSON.stringify({ userId, actionId, updates }),
+  });
+}
