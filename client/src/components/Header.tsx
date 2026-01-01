@@ -1,4 +1,4 @@
-import { Activity, Settings, LogOut, User, History, Target, TrendingUp } from 'lucide-react';
+import { Activity, Settings, LogOut, User, History, Target, TrendingUp, Zap } from 'lucide-react';
 
 interface HeaderProps {
   displayName?: string;
@@ -6,10 +6,11 @@ interface HeaderProps {
   onHistoryClick?: () => void;
   onActionsClick?: () => void;
   onTrendsClick?: () => void;
+  onSnapshotClick?: () => void;
   onLogout?: () => void;
 }
 
-export function Header({ displayName, onSettingsClick, onHistoryClick, onActionsClick, onTrendsClick, onLogout }: HeaderProps) {
+export function Header({ displayName, onSettingsClick, onHistoryClick, onActionsClick, onTrendsClick, onSnapshotClick, onLogout }: HeaderProps) {
   const isLoggedIn = !!displayName;
 
   return (
@@ -29,6 +30,18 @@ export function Header({ displayName, onSettingsClick, onHistoryClick, onActions
             <User className="w-4 h-4" />
             <span className="text-sm hidden sm:inline">{displayName}</span>
           </div>
+
+          {/* Quick Snapshot Button - Primary action */}
+          {onSnapshotClick && (
+            <button
+              onClick={onSnapshotClick}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-yellow-400 bg-yellow-400/10 hover:bg-yellow-400/20 border border-yellow-400/30 rounded-lg transition-colors"
+              title="Quick Daily Snapshot"
+            >
+              <Zap className="w-4 h-4" />
+              <span className="text-sm font-medium hidden sm:inline">Today</span>
+            </button>
+          )}
 
           {/* History Button */}
           {onHistoryClick && (

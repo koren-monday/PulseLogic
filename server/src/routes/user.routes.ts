@@ -12,11 +12,16 @@ import {
   saveActions,
   getActions,
   updateAction,
+  saveStatistics,
+  getLatestStatistics,
+  getStatisticsHistory,
   type UserSettings,
   type LifeContext,
   type CloudReport,
   type CloudAction,
 } from '../services/firestore.service.js';
+import { calculateStatistics, compareDayToStats } from '../services/statistics.service.js';
+import type { GarminHealthData } from '../types/index.js';
 
 const router = Router();
 
@@ -261,6 +266,111 @@ router.post('/actions/update', async (req: Request, res: Response) => {
   }
 
   res.json({ success: true });
+});
+
+// ============================================================================
+// Statistics Routes
+// ============================================================================
+
+/**
+ * POST /api/user/statistics
+ * Get latest statistics for a user
+ */
+router.post('/statistics', async (req: Request, res: Response) => {
+  const { userId } = req.body;
+
+  if (!userId) {
+    res.status(400).json({ success: false, error: 'userId required' });
+    return;
+  }
+
+  const stats = await getLatestStatistics(userId);
+  res.json({ success: true, data: stats });
+});
+
+/**
+ * POST /api/user/statistics/history
+ * Get statistics history for a user
+ */
+router.post('/statistics/history', async (req: Request, res: Response) => {
+  const { userId, limit } = req.body;
+
+  if (!userId) {
+    res.status(400).json({ success: false, error: 'userId required' });
+    return;
+  }
+
+  const history = await getStatisticsHistory(userId, limit || 10);
+  res.json({ success: true, data: history });
+});
+
+/**
+ * POST /api/user/statistics/calculate
+ * Calculate and save statistics from health data
+ */
+router.post('/statistics/calculate', async (req: Request, res: Response) => {
+  const { userId, healthData } = req.body;
+
+  if (!userId || !healthData) {
+    res.status(400).json({ success: false, error: 'userId and healthData required' });
+    return;
+  }
+
+  try {
+    const stats = calculateStatistics(healthData as GarminHealthData);
+    const success = await saveStatistics(userId, stats);
+
+    if (!success) {
+      res.status(500).json({ success: false, error: 'Failed to save statistics' });
+      return;
+    }
+
+    res.json({ success: true, data: stats });
+  } catch (error) {
+    console.error('Failed to calculate statistics:', error);
+    res.status(500).json({ success: false, error: 'Failed to calculate statistics' });
+  }
+});
+
+/**
+ * POST /api/user/statistics/compare
+ * Compare today's data against stored statistics
+ */
+router.post('/statistics/compare', async (req: Request, res: Response) => {
+  const { userId, todayData } = req.body;
+
+  if (!userId || !todayData) {
+    res.status(400).json({ success: false, error: 'userId and todayData required' });
+    return;
+  }
+
+  try {
+    const stats = await getLatestStatistics(userId);
+    if (!stats) {
+      res.json({
+        success: true,
+        data: { comparisons: [], message: 'No stored statistics available' },
+      });
+      return;
+    }
+
+    const comparisons = compareDayToStats(todayData as GarminHealthData, stats);
+    res.json({
+      success: true,
+      data: {
+        comparisons,
+        statisticsFrom: {
+          calculatedAt: stats.calculatedAt,
+          periodStart: stats.periodStart,
+          periodEnd: stats.periodEnd,
+          daysIncluded: stats.daysIncluded,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Failed to compare statistics:', error);
+    res.status(500).json({ success: false, error: 'Failed to compare statistics' });
+  }
 });
 
 export default router;

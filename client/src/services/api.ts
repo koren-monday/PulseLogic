@@ -10,6 +10,8 @@ import type {
   ChatResponse,
   LifeContext,
   DailyInsightResponse,
+  UserStatistics,
+  StatisticsCompareResult,
 } from '../types';
 import { getSessionId, storeSessionId, storeGarminEmail, clearGarminAuth } from '../utils/storage';
 
@@ -357,5 +359,43 @@ export async function updateCloudAction(
   await apiFetch('/user/actions/update', {
     method: 'POST',
     body: JSON.stringify({ userId, actionId, updates }),
+  });
+}
+
+// ============================================================================
+// Statistics API
+// ============================================================================
+
+export async function fetchLatestStatistics(userId: string): Promise<UserStatistics | null> {
+  return apiFetch<UserStatistics | null>('/user/statistics', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function fetchStatisticsHistory(userId: string, limit = 10): Promise<UserStatistics[]> {
+  return apiFetch<UserStatistics[]>('/user/statistics/history', {
+    method: 'POST',
+    body: JSON.stringify({ userId, limit }),
+  });
+}
+
+export async function calculateAndSaveStatistics(
+  userId: string,
+  healthData: GarminHealthData
+): Promise<UserStatistics> {
+  return apiFetch<UserStatistics>('/user/statistics/calculate', {
+    method: 'POST',
+    body: JSON.stringify({ userId, healthData }),
+  });
+}
+
+export async function compareDayToStatistics(
+  userId: string,
+  todayData: GarminHealthData
+): Promise<StatisticsCompareResult> {
+  return apiFetch<StatisticsCompareResult>('/user/statistics/compare', {
+    method: 'POST',
+    body: JSON.stringify({ userId, todayData }),
   });
 }

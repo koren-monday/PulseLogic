@@ -8,6 +8,7 @@ import { ReportHistory } from './components/ReportHistory';
 import { ReportViewer } from './components/ReportViewer';
 import { ActionTracker } from './components/ActionTracker';
 import { TrendComparison } from './components/TrendComparison';
+import { QuickDailySnapshot } from './components/QuickDailySnapshot';
 import {
   getUserSettings,
   storeUserSettings,
@@ -33,6 +34,7 @@ function App() {
   const [currentStep, setCurrentStep] = useState<AppStep>('data');
   const [healthData, setHealthData] = useState<GarminHealthData | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSnapshot, setShowSnapshot] = useState(false);
   const [viewingReport, setViewingReport] = useState<SavedReport | null>(null);
 
   // User settings (loaded after login)
@@ -119,6 +121,7 @@ function App() {
       <div className="max-w-3xl mx-auto px-4 pb-12">
         <Header
           displayName={displayName}
+          onSnapshotClick={() => setShowSnapshot(true)}
           onHistoryClick={() => {
             setViewingReport(null);
             setCurrentStep('history');
@@ -183,6 +186,10 @@ function App() {
           settings={userSettings}
           onSave={handleSettingsSave}
         />
+
+        {showSnapshot && (
+          <QuickDailySnapshot onClose={() => setShowSnapshot(false)} />
+        )}
       </div>
     </div>
   );

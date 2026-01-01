@@ -380,3 +380,106 @@ export async function updateAction(
     return false;
   }
 }
+
+// ============================================================================
+// Statistics Subcollection
+// ============================================================================
+
+export interface CloudStatistics {
+  id: string;
+  calculatedAt: string;
+  periodStart: string;
+  periodEnd: string;
+  daysIncluded: number;
+  sleep: {
+    durationHours: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+    sleepScore: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+    deepSleepPercent: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+    remSleepPercent: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+    restingHR: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+  };
+  stress: {
+    overallLevel: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+    highStressPercent: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+    lowStressPercent: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+  };
+  bodyBattery: {
+    charged: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+    drained: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+    endLevel: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+    highestLevel: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+  };
+  heartRate: {
+    resting: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+    min: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+    max: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+  };
+  activity: {
+    dailyCalories: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+    sessionDuration: { avg: number; median: number; min: number; max: number; p25?: number; p75?: number; count: number };
+    activeDaysPerWeek: number;
+    totalActivities: number;
+  };
+}
+
+export async function saveStatistics(userId: string, statistics: CloudStatistics): Promise<boolean> {
+  const firestore = getDb();
+  if (!firestore) return false;
+
+  try {
+    await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('statistics')
+      .doc(statistics.id)
+      .set({
+        ...statistics,
+        updatedAt: new Date().toISOString(),
+      });
+    return true;
+  } catch (error) {
+    console.error('Failed to save statistics:', error);
+    return false;
+  }
+}
+
+export async function getLatestStatistics(userId: string): Promise<CloudStatistics | null> {
+  const firestore = getDb();
+  if (!firestore) return null;
+
+  try {
+    const snapshot = await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('statistics')
+      .orderBy('calculatedAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) return null;
+    return snapshot.docs[0].data() as CloudStatistics;
+  } catch (error) {
+    console.error('Failed to get latest statistics:', error);
+    return null;
+  }
+}
+
+export async function getStatisticsHistory(userId: string, limit = 10): Promise<CloudStatistics[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+
+  try {
+    const snapshot = await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('statistics')
+      .orderBy('calculatedAt', 'desc')
+      .limit(limit)
+      .get();
+
+    return snapshot.docs.map(doc => doc.data() as CloudStatistics);
+  } catch (error) {
+    console.error('Failed to get statistics history:', error);
+    return [];
+  }
+}

@@ -350,3 +350,64 @@ export interface ApiResponse<T = unknown> {
   data?: T;
   error?: string;
 }
+
+// ============================================================================
+// User Statistics Types - Aggregated metrics stored in Firebase
+// ============================================================================
+
+export interface MetricStats {
+  avg: number;
+  median: number;
+  min: number;
+  max: number;
+  p25?: number;
+  p75?: number;
+  count: number;
+}
+
+export interface SleepStats {
+  durationHours: MetricStats;
+  sleepScore: MetricStats;
+  deepSleepPercent: MetricStats;
+  remSleepPercent: MetricStats;
+  restingHR: MetricStats;
+}
+
+export interface StressStats {
+  overallLevel: MetricStats;
+  highStressPercent: MetricStats;
+  lowStressPercent: MetricStats;
+}
+
+export interface BodyBatteryStats {
+  charged: MetricStats;
+  drained: MetricStats;
+  endLevel: MetricStats;
+  highestLevel: MetricStats;
+}
+
+export interface HeartRateStats {
+  resting: MetricStats;
+  min: MetricStats;
+  max: MetricStats;
+}
+
+export interface ActivityStats {
+  dailyCalories: MetricStats;
+  sessionDuration: MetricStats;
+  activeDaysPerWeek: number;
+  totalActivities: number;
+}
+
+export interface UserStatistics {
+  id: string;
+  calculatedAt: string;
+  periodStart: string;
+  periodEnd: string;
+  daysIncluded: number;
+  sleep: SleepStats;
+  stress: StressStats;
+  bodyBattery: BodyBatteryStats;
+  heartRate: HeartRateStats;
+  activity: ActivityStats;
+}

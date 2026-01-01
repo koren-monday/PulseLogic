@@ -307,3 +307,77 @@ export interface AppConfig {
   selectedProvider: LLMProvider;
   selectedModels: Partial<Record<LLMProvider, string>>;
 }
+
+// ============================================================================
+// User Statistics Types
+// ============================================================================
+
+export interface MetricStats {
+  avg: number;
+  median: number;
+  min: number;
+  max: number;
+  p25?: number;
+  p75?: number;
+  count: number;
+}
+
+export interface UserStatistics {
+  id: string;
+  calculatedAt: string;
+  periodStart: string;
+  periodEnd: string;
+  daysIncluded: number;
+  sleep: {
+    durationHours: MetricStats;
+    sleepScore: MetricStats;
+    deepSleepPercent: MetricStats;
+    remSleepPercent: MetricStats;
+    restingHR: MetricStats;
+  };
+  stress: {
+    overallLevel: MetricStats;
+    highStressPercent: MetricStats;
+    lowStressPercent: MetricStats;
+  };
+  bodyBattery: {
+    charged: MetricStats;
+    drained: MetricStats;
+    endLevel: MetricStats;
+    highestLevel: MetricStats;
+  };
+  heartRate: {
+    resting: MetricStats;
+    min: MetricStats;
+    max: MetricStats;
+  };
+  activity: {
+    dailyCalories: MetricStats;
+    sessionDuration: MetricStats;
+    activeDaysPerWeek: number;
+    totalActivities: number;
+  };
+}
+
+export interface DailyComparison {
+  metric: string;
+  label: string;
+  todayValue: number | null;
+  todayFormatted: string;
+  avgValue: number;
+  avgFormatted: string;
+  percentDiff: number;
+  trend: 'better' | 'worse' | 'same';
+  unit: string;
+}
+
+export interface StatisticsCompareResult {
+  comparisons: DailyComparison[];
+  statisticsFrom?: {
+    calculatedAt: string;
+    periodStart: string;
+    periodEnd: string;
+    daysIncluded: number;
+  };
+  message?: string;
+}
