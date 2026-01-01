@@ -55,15 +55,33 @@ export function removeApiKey(provider: string): void {
 }
 
 export function storeSessionId(sessionId: string): void {
-  sessionStorage.setItem(`${STORAGE_KEY_PREFIX}session`, sessionId);
+  // Use localStorage for persistent sessions across browser restarts
+  localStorage.setItem(`${STORAGE_KEY_PREFIX}session`, sessionId);
 }
 
 export function getSessionId(): string | null {
-  return sessionStorage.getItem(`${STORAGE_KEY_PREFIX}session`);
+  return localStorage.getItem(`${STORAGE_KEY_PREFIX}session`);
 }
 
 export function clearSession(): void {
-  sessionStorage.removeItem(`${STORAGE_KEY_PREFIX}session`);
+  localStorage.removeItem(`${STORAGE_KEY_PREFIX}session`);
+}
+
+// ============================================================================
+// Garmin Auth Persistence (for session restore without MFA)
+// ============================================================================
+
+export function storeGarminEmail(email: string): void {
+  localStorage.setItem(`${STORAGE_KEY_PREFIX}garmin_email`, email);
+}
+
+export function getGarminEmail(): string | null {
+  return localStorage.getItem(`${STORAGE_KEY_PREFIX}garmin_email`);
+}
+
+export function clearGarminAuth(): void {
+  localStorage.removeItem(`${STORAGE_KEY_PREFIX}session`);
+  localStorage.removeItem(`${STORAGE_KEY_PREFIX}garmin_email`);
 }
 
 // ============================================================================

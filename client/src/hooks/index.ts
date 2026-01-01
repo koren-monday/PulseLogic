@@ -1,4 +1,4 @@
-export { useGarminStatus, useGarminLogin, useGarminMFA, useGarminLogout, useGarminData } from './useGarmin';
+export { useGarminStatus, useGarminLogin, useGarminMFA, useGarminRestore, useGarminLogout, useGarminData } from './useGarmin';
 export { useAnalysis, useChat, useModelRegistry, useDailyInsightGeneration } from './useAnalysis';
 
 // Storage & Engagement Hooks

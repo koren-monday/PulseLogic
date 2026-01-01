@@ -1,6 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
 import { GarminService, type LoginResult } from '../services/garmin.service.js';
+import { tokensExist } from '../services/token-storage.js';
 import { validate, AppError } from '../middleware/index.js';
 import { GarminLoginSchema, FetchDataRequestSchema, type ApiResponse, type GarminHealthData } from '../types/index.js';
 
@@ -120,6 +121,75 @@ router.post(
   }
 );
 
+// Schema for session restore
+const RestoreSessionSchema = z.object({
+  email: z.string().email('Valid email required'),
+});
+
+/**
+ * POST /api/garmin/restore
+ * Restore session from stored OAuth tokens (no MFA required)
+ */
+router.post(
+  '/restore',
+  validate(RestoreSessionSchema),
+  async (req: Request, res: Response<ApiResponse<LoginResponse>>, next: NextFunction) => {
+    try {
+      const { email } = req.body;
+      const { id, service } = getSession(req);
+
+      const result = await service.restoreSession(email);
+
+      if (result.success && result.session) {
+        res.json({
+          success: true,
+          data: {
+            sessionId: id,
+            isAuthenticated: true,
+            displayName: result.session.displayName,
+            userId: result.session.userId,
+          },
+        });
+      } else {
+        // Return success: false but not as an error - let frontend handle gracefully
+        res.json({
+          success: false,
+          error: result.error || 'Session restore failed',
+        } as ApiResponse<LoginResponse>);
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Schema for checking if restore is possible
+const CheckRestoreSchema = z.object({
+  email: z.string().email('Valid email required'),
+});
+
+/**
+ * POST /api/garmin/can-restore
+ * Check if stored tokens exist for a user
+ */
+router.post(
+  '/can-restore',
+  validate(CheckRestoreSchema),
+  async (req: Request, res: Response<ApiResponse<{ canRestore: boolean }>>, next: NextFunction) => {
+    try {
+      const { email } = req.body;
+      const canRestore = await tokensExist(email);
+
+      res.json({
+        success: true,
+        data: { canRestore },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 /**
  * POST /api/garmin/logout
  * Clear the Garmin session
@@ -127,10 +197,11 @@ router.post(
 router.post('/logout', (req: Request, res: Response<ApiResponse>, next: NextFunction) => {
   try {
     const sessionId = req.headers['x-garmin-session'] as string;
+    const clearStoredTokens = req.body?.clearStoredTokens ?? false;
 
     if (sessionId && sessions.has(sessionId)) {
       const service = sessions.get(sessionId)!;
-      service.logout();
+      service.logout(clearStoredTokens);
       sessions.delete(sessionId);
     }
 

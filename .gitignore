@@ -34,3 +34,7 @@ coverage/
 
 # TypeScript cache
 *.tsbuildinfo
+
+# Garmin session data (contains OAuth tokens - NEVER commit)
+.garmin-tokens/
+.mfa-sessions/

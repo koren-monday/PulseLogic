@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { Activity, User, Eye, EyeOff, LogIn, Shield, X, CheckCircle } from 'lucide-react';
-import { useGarminLogin, useGarminMFA } from '../hooks';
+import { useState, useEffect } from 'react';
+import { Activity, User, Eye, EyeOff, LogIn, Shield, X, CheckCircle, RefreshCw } from 'lucide-react';
+import { useGarminLogin, useGarminMFA, useGarminRestore } from '../hooks';
 import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { getGarminEmail } from '../utils/storage';
 import type { GarminCredentials } from '../types';
 
 interface LoginPageProps {
@@ -10,11 +11,16 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ onLoginSuccess }: LoginPageProps) {
+  // Check for stored email to pre-fill and attempt restore
+  const storedEmail = getGarminEmail();
+
   const [credentials, setCredentials] = useState<GarminCredentials>({
-    username: '',
+    username: storedEmail || '',
     password: '',
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(!!storedEmail);
+  const [restoreAttempted, setRestoreAttempted] = useState(false);
 
   // MFA state
   const [showMFADialog, setShowMFADialog] = useState(false);
@@ -23,6 +29,28 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
   const loginMutation = useGarminLogin();
   const mfaMutation = useGarminMFA();
+  const restoreMutation = useGarminRestore();
+
+  // Attempt to restore session on mount if we have a stored email
+  useEffect(() => {
+    if (storedEmail && !restoreAttempted) {
+      setRestoreAttempted(true);
+      restoreMutation.mutate(storedEmail, {
+        onSuccess: (session) => {
+          if (session?.isAuthenticated) {
+            onLoginSuccess(session.userId || session.sessionId, session.displayName || storedEmail);
+          } else {
+            setIsRestoring(false);
+          }
+        },
+        onError: () => {
+          setIsRestoring(false);
+        },
+      });
+    } else if (!storedEmail) {
+      setIsRestoring(false);
+    }
+  }, [storedEmail, restoreAttempted, restoreMutation, onLoginSuccess]);
 
   const handleLogin = async () => {
     try {
@@ -42,7 +70,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const handleMFASubmit = async () => {
     if (!mfaSessionId || !mfaCode) return;
     try {
-      const result = await mfaMutation.mutateAsync({ mfaSessionId, code: mfaCode });
+      const result = await mfaMutation.mutateAsync({ mfaSessionId, code: mfaCode, email: credentials.username });
       if (result.isAuthenticated) {
         setShowMFADialog(false);
         onLoginSuccess(result.userId || result.sessionId, result.displayName || credentials.username);
@@ -57,6 +85,28 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setMfaCode('');
     setMfaSessionId(null);
   };
+
+  // Show restoring session UI while attempting to restore
+  if (isRestoring) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="flex items-center justify-center gap-3 mb-8">
+            <Activity className="w-12 h-12 text-garmin-blue" />
+            <div className="text-center">
+              <h1 className="text-3xl font-bold text-white">Garmin Insights</h1>
+              <p className="text-slate-400 text-sm">AI-Powered Health Analysis</p>
+            </div>
+          </div>
+          <div className="card flex flex-col items-center py-8">
+            <RefreshCw className="w-8 h-8 text-garmin-blue animate-spin mb-4" />
+            <p className="text-lg font-medium">Restoring your session...</p>
+            <p className="text-slate-400 text-sm mt-2">Please wait</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">

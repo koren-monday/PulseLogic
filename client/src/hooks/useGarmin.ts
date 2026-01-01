@@ -5,9 +5,10 @@ import {
   checkGarminStatus,
   fetchGarminData,
   submitMFACode,
+  restoreGarminSession,
 } from '../services/api';
 import type { GarminCredentials } from '../types';
-import { clearSession } from '../utils/storage';
+import { clearGarminAuth } from '../utils/storage';
 
 export function useGarminStatus() {
   return useQuery({
@@ -36,10 +37,23 @@ export function useGarminMFA() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ mfaSessionId, code }: { mfaSessionId: string; code: string }) =>
-      submitMFACode(mfaSessionId, code),
+    mutationFn: ({ mfaSessionId, code, email }: { mfaSessionId: string; code: string; email: string }) =>
+      submitMFACode(mfaSessionId, code, email),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['garmin', 'status'] });
+    },
+  });
+}
+
+export function useGarminRestore() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (email: string) => restoreGarminSession(email),
+    onSuccess: (data) => {
+      if (data?.isAuthenticated) {
+        queryClient.invalidateQueries({ queryKey: ['garmin', 'status'] });
+      }
     },
   });
 }
@@ -48,9 +62,9 @@ export function useGarminLogout() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: logoutFromGarmin,
+    mutationFn: (clearStoredTokens: boolean = false) => logoutFromGarmin(clearStoredTokens),
     onSuccess: () => {
-      clearSession();
+      clearGarminAuth();
       queryClient.invalidateQueries({ queryKey: ['garmin'] });
     },
   });

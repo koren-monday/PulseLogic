@@ -11,7 +11,7 @@ import type {
   LifeContext,
   DailyInsightResponse,
 } from '../types';
-import { getSessionId, storeSessionId } from '../utils/storage';
+import { getSessionId, storeSessionId, storeGarminEmail, clearGarminAuth } from '../utils/storage';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -52,15 +52,16 @@ export async function loginToGarmin(credentials: GarminCredentials): Promise<Gar
     body: JSON.stringify(credentials),
   });
 
-  // Store the session ID for future requests
+  // Store the session ID and email for future requests and session restore
   if (session.sessionId) {
     storeSessionId(session.sessionId);
+    storeGarminEmail(credentials.username);
   }
 
   return session;
 }
 
-export async function submitMFACode(mfaSessionId: string, code: string): Promise<GarminSession> {
+export async function submitMFACode(mfaSessionId: string, code: string, email: string): Promise<GarminSession> {
   const session = await apiFetch<GarminSession>('/garmin/mfa', {
     method: 'POST',
     body: JSON.stringify({ mfaSessionId, code }),
@@ -68,13 +69,55 @@ export async function submitMFACode(mfaSessionId: string, code: string): Promise
 
   if (session.sessionId) {
     storeSessionId(session.sessionId);
+    storeGarminEmail(email);
   }
 
   return session;
 }
 
-export async function logoutFromGarmin(): Promise<void> {
-  await apiFetch('/garmin/logout', { method: 'POST' });
+export async function logoutFromGarmin(clearStoredTokens = false): Promise<void> {
+  await apiFetch('/garmin/logout', {
+    method: 'POST',
+    body: JSON.stringify({ clearStoredTokens }),
+  });
+  clearGarminAuth();
+}
+
+export async function canRestoreGarminSession(email: string): Promise<boolean> {
+  try {
+    const result = await apiFetch<{ canRestore: boolean }>('/garmin/can-restore', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+    return result.canRestore;
+  } catch {
+    return false;
+  }
+}
+
+export async function restoreGarminSession(email: string): Promise<GarminSession | null> {
+  try {
+    const response = await fetch(`${API_BASE}/garmin/restore`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+
+    const data = await response.json();
+
+    if (data.success && data.data) {
+      const session = data.data as GarminSession;
+      if (session.sessionId) {
+        storeSessionId(session.sessionId);
+        storeGarminEmail(email);
+      }
+      return session;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export async function checkGarminStatus(): Promise<{ authenticated: boolean }> {

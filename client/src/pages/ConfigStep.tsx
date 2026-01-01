@@ -84,7 +84,7 @@ export function ConfigStep({ onComplete }: ConfigStepProps) {
   const handleMFASubmit = async () => {
     if (!mfaSessionId || !mfaCode) return;
     try {
-      await mfaMutation.mutateAsync({ mfaSessionId, code: mfaCode });
+      await mfaMutation.mutateAsync({ mfaSessionId, code: mfaCode, email: garminCreds.username });
       setShowMFADialog(false);
       setMfaCode('');
       setMfaSessionId(null);

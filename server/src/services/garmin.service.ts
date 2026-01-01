@@ -3,6 +3,7 @@ const { GarminConnect, MFAManager } = GarminConnectPkg;
 import { randomUUID } from 'crypto';
 import path from 'path';
 import { getDateRange } from '../utils/dates.js';
+import { saveTokens, loadTokens, deleteTokens } from './token-storage.js';
 import type {
   GarminCredentials,
   GarminSession,
@@ -52,6 +53,7 @@ export interface LoginResult {
 export class GarminService {
   private client: GarminConnectClient | null = null;
   private mfaStorageDir: string;
+  private userEmail: string | null = null;
 
   constructor() {
     // Use a temp directory for MFA session storage
@@ -75,7 +77,10 @@ export class GarminService {
 
       await this.client.login();
 
-      // Login succeeded without MFA
+      // Login succeeded without MFA - store email and persist tokens
+      this.userEmail = credentials.username;
+      await this.persistTokens();
+
       const userProfile = await this.client.getUserProfile();
 
       return {
@@ -175,6 +180,10 @@ export class GarminService {
         const client = await session.loginPromise;
         this.client = client;
 
+        // Store email and persist tokens for session restoration
+        this.userEmail = session.credentials.username;
+        await this.persistTokens();
+
         // Get user profile
         const userProfile = await this.client.getUserProfile();
 
@@ -215,8 +224,82 @@ export class GarminService {
   /**
    * Logout and clear the client session
    */
-  logout(): void {
+  logout(clearStoredTokens = false): void {
+    if (clearStoredTokens && this.userEmail) {
+      deleteTokens(this.userEmail).catch(() => {});
+    }
     this.client = null;
+    this.userEmail = null;
+  }
+
+  /**
+   * Persist OAuth tokens to storage for session restoration
+   */
+  private async persistTokens(): Promise<void> {
+    if (!this.client || !this.userEmail) return;
+
+    try {
+      const oauth1 = this.client.client.oauth1Token;
+      const oauth2 = this.client.client.oauth2Token;
+
+      if (oauth1 && oauth2) {
+        await saveTokens(this.userEmail, { oauth1, oauth2 });
+        console.log('[GarminService] Tokens persisted for session restoration');
+      }
+    } catch (error) {
+      console.error('[GarminService] Failed to persist tokens:', error);
+    }
+  }
+
+  /**
+   * Restore session from stored tokens (no MFA required)
+   */
+  async restoreSession(email: string): Promise<LoginResult> {
+    try {
+      const tokens = await loadTokens(email);
+      if (!tokens) {
+        return { success: false, error: 'No stored session found' };
+      }
+
+      // Create client and load tokens
+      this.client = new GarminConnect({
+        username: email,
+        password: '', // Not needed when restoring from tokens
+      });
+
+      this.client.loadToken(tokens.oauth1, tokens.oauth2);
+      this.userEmail = email;
+
+      // Verify the session works by fetching user profile
+      const userProfile = await this.client.getUserProfile();
+
+      // Re-persist tokens (they may have been refreshed)
+      await this.persistTokens();
+
+      return {
+        success: true,
+        session: {
+          isAuthenticated: true,
+          displayName: userProfile?.displayName ?? userProfile?.fullName ?? email,
+          userId: userProfile?.profileId?.toString(),
+        },
+      };
+    } catch (error) {
+      // Session restore failed - clear invalid tokens
+      await deleteTokens(email);
+      this.client = null;
+      this.userEmail = null;
+
+      const message = error instanceof Error ? error.message : 'Session restore failed';
+      return { success: false, error: message };
+    }
+  }
+
+  /**
+   * Get current user email (for token operations)
+   */
+  getUserEmail(): string | null {
+    return this.userEmail;
   }
 
   /**
