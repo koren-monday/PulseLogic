@@ -81,7 +81,7 @@ export function Paywall({ isOpen, onClose, onSubscribed }: PaywallProps) {
     if (!selectedPackage || !offerings?.current) return;
 
     const pkg = offerings.current.availablePackages.find(
-      (p) => p.identifier === selectedPackage
+      (p: PurchasesPackage) => p.identifier === selectedPackage
     );
     if (!pkg) return;
 
@@ -213,7 +213,7 @@ export function Paywall({ isOpen, onClose, onSubscribed }: PaywallProps) {
               {/* Package Selection */}
               {offerings?.current?.availablePackages && (
                 <div className="space-y-3 mb-6">
-                  {offerings.current.availablePackages.map((pkg) => (
+                  {offerings.current.availablePackages.map((pkg: PurchasesPackage) => (
                     <button
                       key={pkg.identifier}
                       onClick={() => setSelectedPackage(pkg.identifier)}

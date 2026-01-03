@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { Activity, User, Eye, EyeOff, LogIn, Shield, X, CheckCircle, RefreshCw } from 'lucide-react';
 import { useGarminLogin, useGarminMFA, useGarminRestore } from '../hooks';
 import { Alert } from '../components/Alert';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingOverlay } from '../components/LoadingOverlay';
 import { getGarminEmail } from '../utils/storage';
+import { signInWithToken } from '../config/firebase';
 import type { GarminCredentials } from '../types';
 
 interface LoginPageProps {
@@ -36,8 +37,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     if (storedEmail && !restoreAttempted) {
       setRestoreAttempted(true);
       restoreMutation.mutate(storedEmail, {
-        onSuccess: (session) => {
+        onSuccess: async (session) => {
           if (session?.isAuthenticated) {
+            // Sign in to Firebase with custom token (silent - user doesn't see this)
+            if (session.firebaseToken) {
+              await signInWithToken(session.firebaseToken).catch(err => {
+                console.warn('Firebase sign-in failed, continuing with Garmin auth:', err);
+              });
+            }
             onLoginSuccess(session.userId || session.sessionId, session.displayName || storedEmail);
           } else {
             setIsRestoring(false);
@@ -60,6 +67,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         setMfaSessionId(result.mfaSessionId);
         setShowMFADialog(true);
       } else if (result.isAuthenticated) {
+        // Sign in to Firebase with custom token (silent - user doesn't see this)
+        if (result.firebaseToken) {
+          await signInWithToken(result.firebaseToken).catch(err => {
+            console.warn('Firebase sign-in failed, continuing with Garmin auth:', err);
+          });
+        }
         onLoginSuccess(result.userId || result.sessionId, result.displayName || credentials.username);
       }
     } catch {
@@ -72,6 +85,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     try {
       const result = await mfaMutation.mutateAsync({ mfaSessionId, code: mfaCode, email: credentials.username });
       if (result.isAuthenticated) {
+        // Sign in to Firebase with custom token (silent - user doesn't see this)
+        if (result.firebaseToken) {
+          await signInWithToken(result.firebaseToken).catch(err => {
+            console.warn('Firebase sign-in failed, continuing with Garmin auth:', err);
+          });
+        }
         setShowMFADialog(false);
         onLoginSuccess(result.userId || result.sessionId, result.displayName || credentials.username);
       }
@@ -121,7 +140,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         </div>
 
         {/* Login Card */}
-        <div className="card">
+        <div className={`card relative ${loginMutation.isPending ? 'pointer-events-none' : ''}`}>
+          <LoadingOverlay isLoading={loginMutation.isPending} type="syncing" message="Signing in to Garmin..." />
           <div className="flex items-center gap-2 mb-6">
             <User className="w-5 h-5 text-garmin-blue" />
             <h2 className="text-lg font-semibold">Sign in with Garmin Connect</h2>
@@ -174,14 +194,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               onClick={handleLogin}
               disabled={!credentials.username || !credentials.password || loginMutation.isPending}
             >
-              {loginMutation.isPending ? (
-                <LoadingSpinner size="sm" />
-              ) : (
-                <>
-                  <LogIn className="w-5 h-5" />
-                  Sign In
-                </>
-              )}
+              <LogIn className="w-5 h-5" />
+              Sign In
             </button>
           </div>
 
@@ -193,7 +207,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         {/* MFA Dialog */}
         {showMFADialog && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-            <div className="bg-slate-800 rounded-lg p-6 w-full max-w-md mx-4 border border-slate-700">
+            <div className={`bg-slate-800 rounded-lg p-6 w-full max-w-md mx-4 border border-slate-700 relative ${mfaMutation.isPending ? 'pointer-events-none' : ''}`}>
+              <LoadingOverlay isLoading={mfaMutation.isPending} type="syncing" message="Verifying code..." />
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Shield className="w-5 h-5 text-garmin-blue" />
@@ -237,14 +252,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                     onClick={handleMFASubmit}
                     disabled={mfaCode.length < 4 || mfaMutation.isPending}
                   >
-                    {mfaMutation.isPending ? (
-                      <LoadingSpinner size="sm" />
-                    ) : (
-                      <>
-                        <CheckCircle className="w-4 h-4" />
-                        Verify
-                      </>
-                    )}
+                    <CheckCircle className="w-4 h-4" />
+                    Verify
                   </button>
                 </div>
               </div>

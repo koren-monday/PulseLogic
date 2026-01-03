@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useGarminData } from '../hooks';
 import { Alert } from '../components/Alert';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingOverlay } from '../components/LoadingOverlay';
 import { DailyInsight } from '../components/DailyInsight';
 import { QuickDailyInsight } from '../components/QuickDailyInsight';
 import { ActionTracker } from '../components/ActionTracker';
@@ -74,7 +74,8 @@ export function DataStep({ onComplete, onBack, userId }: DataStepProps) {
       </div>
 
       {/* Fetch Controls */}
-      <div className="card">
+      <div className={`card relative ${fetchMutation.isPending ? 'pointer-events-none' : ''}`}>
+        <LoadingOverlay isLoading={fetchMutation.isPending} type="fetching" />
         <div className="flex items-center gap-2 mb-4">
           <Download className="w-5 h-5 text-garmin-blue" />
           <h2 className="text-lg font-semibold">Fetch Health Data</h2>
@@ -119,14 +120,8 @@ export function DataStep({ onComplete, onBack, userId }: DataStepProps) {
           onClick={handleFetch}
           disabled={fetchMutation.isPending}
         >
-          {fetchMutation.isPending ? (
-            <LoadingSpinner size="sm" message="Fetching from Garmin..." />
-          ) : (
-            <>
-              <Download className="w-4 h-4" />
-              {data ? 'Refresh Data' : 'Fetch Data'}
-            </>
-          )}
+          <Download className="w-4 h-4" />
+          {data ? 'Refresh Data' : 'Fetch Data'}
         </button>
       </div>
 

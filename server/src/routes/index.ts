@@ -3,6 +3,7 @@ import garminRoutes from './garmin.routes.js';
 import analyzeRoutes from './analyze.routes.js';
 import userRoutes from './user.routes.js';
 import subscriptionRoutes from './subscription.routes.js';
+import webhooksRoutes from './webhooks.routes.js';
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use('/garmin', garminRoutes);
 router.use('/analyze', analyzeRoutes);
 router.use('/user', userRoutes);
 router.use('/subscription', subscriptionRoutes);
+router.use('/webhooks', webhooksRoutes);
 
 export default router;

@@ -1,0 +1,3 @@
+# Firebase google-services.json contains a public API key that's restricted by package name
+# This is expected to be in the repo per Firebase documentation
+client/android/app/google-services.json:gcp-api-key:18

@@ -22,6 +22,7 @@ export interface GarminSession {
   sessionId: string;
   requiresMFA?: boolean;
   mfaSessionId?: string;
+  firebaseToken?: string; // For client-side Firebase Auth
 }
 
 export interface SleepData {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Zap, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, Lightbulb, RefreshCw } from 'lucide-react';
 import { useDailyInsightGeneration } from '../hooks';
-import { LoadingSpinner } from './LoadingSpinner';
+import { LoadingOverlay } from './LoadingOverlay';
 import { Alert } from './Alert';
 import type { GarminHealthData, DailyInsightData, DailyInsightComparison } from '../types';
 
@@ -53,9 +53,10 @@ export function QuickDailyInsight({ healthData, userId }: QuickDailyInsightProps
   };
 
   // Show generate button if not yet generated
-  if (!hasGenerated && !dailyInsightMutation.isPending) {
+  if (!hasGenerated) {
     return (
-      <div className="card bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30">
+      <div className={`card bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 relative ${dailyInsightMutation.isPending ? 'pointer-events-none min-h-[120px]' : ''}`}>
+        <LoadingOverlay isLoading={dailyInsightMutation.isPending} type="generating" />
         <div className="flex items-center gap-3">
           <div className="text-2xl">&#x26A1;</div>
           <div className="flex-1">
@@ -66,21 +67,13 @@ export function QuickDailyInsight({ healthData, userId }: QuickDailyInsightProps
           </div>
           <button
             onClick={handleGenerate}
+            disabled={dailyInsightMutation.isPending}
             className="btn-primary flex items-center gap-2"
           >
             <Zap className="w-4 h-4" />
             Generate
           </button>
         </div>
-      </div>
-    );
-  }
-
-  // Show loading state
-  if (dailyInsightMutation.isPending) {
-    return (
-      <div className="card bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30">
-        <LoadingSpinner size="sm" message="Generating daily insight..." />
       </div>
     );
   }

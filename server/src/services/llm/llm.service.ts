@@ -89,7 +89,7 @@ export async function analyzeHealthData(options: AnalyzeOptions): Promise<Analys
     model,
     system: buildSystemPrompt(),
     prompt: buildUserPrompt(healthData, customPrompt, lifeContexts),
-    maxTokens: 12000, // Increased to accommodate structured JSON output
+    maxOutputTokens: 12000, // Increased to accommodate structured JSON output
     temperature: 0.5, // Lower temperature for more focused, analytical output
   });
 
@@ -128,7 +128,7 @@ export async function chatAboutHealth(options: ChatOptions): Promise<AnalysisRes
     model,
     system: buildChatSystemPrompt(healthData),
     messages: aiMessages,
-    maxTokens: 4000,
+    maxOutputTokens: 4000,
     temperature: 0.5,
   });
 
@@ -156,7 +156,7 @@ export async function generateDailyInsight(options: DailyInsightOptions): Promis
       model,
       system: buildDailyInsightSystemPrompt(),
       prompt: buildDailyInsightUserPrompt(healthData),
-      maxTokens: 2000, // Smaller since this is a focused response
+      maxOutputTokens: 2000, // Smaller since this is a focused response
       temperature: 0.3, // Lower for more consistent output
     });
 

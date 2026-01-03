@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "829205372026",
+    "project_id": "pulselogic-12322",
+    "storage_bucket": "pulselogic-12322.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:829205372026:android:83d89f3edbe6c2e7952fc3",
+        "android_client_info": {
+          "package_name": "com.pulselogic.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC1IKOSaPXCF172YM_1yvXWnr6o-VMz1U8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

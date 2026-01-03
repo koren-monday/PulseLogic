@@ -1,5 +1,6 @@
-import { Activity, Settings, LogOut, User, History, Target, TrendingUp, Zap } from 'lucide-react';
-import { useTierBadge } from '../contexts/SubscriptionContext';
+import { Activity, Settings, LogOut, User, History, Target, TrendingUp, Zap, Crown } from 'lucide-react';
+import { useTierBadge, useSubscription } from '../contexts/SubscriptionContext';
+import { isPurchasesAvailable } from '../services/purchases';
 
 interface HeaderProps {
   displayName?: string;
@@ -8,12 +9,15 @@ interface HeaderProps {
   onActionsClick?: () => void;
   onTrendsClick?: () => void;
   onSnapshotClick?: () => void;
+  onUpgradeClick?: () => void;
   onLogout?: () => void;
 }
 
-export function Header({ displayName, onSettingsClick, onHistoryClick, onActionsClick, onTrendsClick, onSnapshotClick, onLogout }: HeaderProps) {
+export function Header({ displayName, onSettingsClick, onHistoryClick, onActionsClick, onTrendsClick, onSnapshotClick, onUpgradeClick, onLogout }: HeaderProps) {
   const isLoggedIn = !!displayName;
   const tierBadge = useTierBadge();
+  const { tier } = useSubscription();
+  const showUpgrade = tier === 'free' && isPurchasesAvailable() && onUpgradeClick;
 
   return (
     <header className="flex items-center justify-between py-6">
@@ -35,6 +39,18 @@ export function Header({ displayName, onSettingsClick, onHistoryClick, onActions
               {tierBadge.label}
             </span>
           </div>
+
+          {/* Upgrade Button - show for free tier on native platforms */}
+          {showUpgrade && (
+            <button
+              onClick={onUpgradeClick}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-yellow-400 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 hover:from-yellow-500/30 hover:to-orange-500/30 border border-yellow-500/30 rounded-lg transition-all"
+              title="Upgrade to Pro"
+            >
+              <Crown className="w-4 h-4" />
+              <span className="text-sm font-medium hidden sm:inline">Upgrade</span>
+            </button>
+          )}
 
           {/* Quick Snapshot Button - Primary action */}
           {onSnapshotClick && (

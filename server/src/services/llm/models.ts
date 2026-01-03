@@ -1,5 +1,5 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModel } from 'ai';
 import { MODEL_IDS, type SubscriptionTier } from '../../types/subscription.js';
 
 export interface ModelInfo {
@@ -66,7 +66,7 @@ export function getApiKeyForTier(tier: SubscriptionTier): string {
  * Create a Gemini model instance for the given tier and model ID.
  * Uses server-provided API keys.
  */
-export function createModel(tier: SubscriptionTier, modelId: string): LanguageModelV1 {
+export function createModel(tier: SubscriptionTier, modelId: string): LanguageModel {
   const apiKey = getApiKeyForTier(tier);
   const google = createGoogleGenerativeAI({ apiKey });
   return google(modelId);

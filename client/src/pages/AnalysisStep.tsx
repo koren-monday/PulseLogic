@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Brain, Sparkles, RefreshCw, ChevronLeft, Copy, Check, Settings, Send, MessageCircle, User, Bot, CheckCircle, Lock, Zap } from 'lucide-react';
 import { useAnalysis, useChat, useSaveReport } from '../hooks';
 import { Alert } from '../components/Alert';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingOverlay } from '../components/LoadingOverlay';
 import { LifeContextSelector } from '../components/LifeContextSelector';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { getLifeContexts, storeLifeContexts } from '../utils/storage';
@@ -161,7 +161,8 @@ export function AnalysisStep({
   return (
     <div className="space-y-6">
       {/* Analysis Controls */}
-      <div className="card">
+      <div className={`card relative ${analysisMutation.isPending ? 'pointer-events-none' : ''}`}>
+        <LoadingOverlay isLoading={analysisMutation.isPending} type="analyzing" />
         <div className="flex items-center gap-2 mb-4">
           <Brain className="w-5 h-5 text-garmin-blue" />
           <h2 className="text-lg font-semibold">AI Health Analysis</h2>
@@ -251,9 +252,7 @@ export function AnalysisStep({
           onClick={handleAnalyze}
           disabled={analysisMutation.isPending || reportsRemaining === 0}
         >
-          {analysisMutation.isPending ? (
-            <LoadingSpinner size="sm" message="Analyzing with AI..." />
-          ) : reportsRemaining === 0 ? (
+          {reportsRemaining === 0 ? (
             <>
               <Lock className="w-4 h-4" />
               Limit Reached
@@ -269,7 +268,8 @@ export function AnalysisStep({
 
       {/* Conversation Thread */}
       {chatMessages.length > 0 && (
-        <div className="card">
+        <div className={`card relative ${chatMutation.isPending ? 'pointer-events-none' : ''}`}>
+          <LoadingOverlay isLoading={chatMutation.isPending} type="thinking" />
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <MessageCircle className="w-5 h-5 text-garmin-blue" />
@@ -343,16 +343,6 @@ export function AnalysisStep({
                 )}
               </div>
             ))}
-            {chatMutation.isPending && (
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-garmin-blue flex items-center justify-center">
-                  <Bot className="w-4 h-4 text-white" />
-                </div>
-                <div className="bg-slate-700 rounded-lg p-4">
-                  <LoadingSpinner size="sm" message="Thinking..." />
-                </div>
-              </div>
-            )}
             <div ref={chatEndRef} />
           </div>
 

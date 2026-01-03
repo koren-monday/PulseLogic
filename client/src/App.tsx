@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { Header } from './components/Header';
 import { SettingsModal } from './components/SettingsModal';
+import { Paywall } from './components/Paywall';
 import { LoginPage } from './pages/LoginPage';
 import { DataStep } from './pages/DataStep';
 import { AnalysisStep } from './pages/AnalysisStep';
@@ -20,6 +23,8 @@ import {
 } from './utils/storage';
 import { syncOnLogin, syncReportsAndActionsOnLogin } from './services/sync.service';
 import { clearAllData } from './services/storage.service';
+import { loginToPurchases, logoutFromPurchases } from './services/purchases';
+import { firebaseSignOut } from './config/firebase';
 import type { GarminHealthData } from './types';
 import type { SavedReport } from './db/schema';
 
@@ -36,6 +41,7 @@ function App() {
   const [healthData, setHealthData] = useState<GarminHealthData | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showSnapshot, setShowSnapshot] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
   const [viewingReport, setViewingReport] = useState<SavedReport | null>(null);
 
   // User settings (loaded after login)
@@ -52,13 +58,62 @@ function App() {
       setDisplayName(storedUserId); // Use userId as fallback display name
       setUserSettings(getUserSettings(storedUserId));
       setIsLoggedIn(true);
+
+      // Login to RevenueCat if on native platform
+      loginToPurchases(storedUserId).catch(console.error);
     }
   }, []);
+
+  // Handle Android back button
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const handler = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+      // Close modals first
+      if (showPaywall) {
+        setShowPaywall(false);
+        return;
+      }
+      if (showSettings) {
+        setShowSettings(false);
+        return;
+      }
+      if (showSnapshot) {
+        setShowSnapshot(false);
+        return;
+      }
+      if (viewingReport) {
+        setViewingReport(null);
+        return;
+      }
+
+      // Navigate within app
+      if (currentStep !== 'data') {
+        setCurrentStep('data');
+        setHealthData(null);
+        return;
+      }
+
+      // At root - use browser history or exit
+      if (canGoBack) {
+        window.history.back();
+      } else {
+        CapacitorApp.exitApp();
+      }
+    });
+
+    return () => {
+      handler.then(h => h.remove());
+    };
+  }, [currentStep, showPaywall, showSettings, showSnapshot, viewingReport]);
 
   const handleLoginSuccess = async (newUserId: string, newDisplayName: string) => {
     setUserId(newUserId);
     setDisplayName(newDisplayName);
     storeCurrentUserId(newUserId);
+
+    // Login to RevenueCat with the userId (Firebase UID or email)
+    loginToPurchases(newUserId).catch(console.error);
 
     // Sync with cloud (only life contexts now - no API key settings)
     const syncedSettings = await syncOnLogin(newUserId);
@@ -71,6 +126,13 @@ function App() {
 
   const handleLogout = async () => {
     clearSession();
+
+    // Logout from Firebase and RevenueCat
+    await Promise.all([
+      firebaseSignOut().catch(console.error),
+      logoutFromPurchases().catch(console.error),
+    ]);
+
     // Clear IndexedDB to prevent data leaking between accounts
     await clearAllData();
     setIsLoggedIn(false);
@@ -121,6 +183,7 @@ function App() {
             onActionsClick={() => setCurrentStep('actions')}
             onTrendsClick={() => setCurrentStep('trends')}
             onSettingsClick={() => setShowSettings(true)}
+            onUpgradeClick={() => setShowPaywall(true)}
             onLogout={handleLogout}
           />
 
@@ -186,6 +249,15 @@ function App() {
           {showSnapshot && (
             <QuickDailySnapshot onClose={() => setShowSnapshot(false)} />
           )}
+
+          <Paywall
+            isOpen={showPaywall}
+            onClose={() => setShowPaywall(false)}
+            onSubscribed={() => {
+              // Refresh subscription context on successful subscription
+              window.location.reload();
+            }}
+          />
         </div>
       </div>
     </SubscriptionProvider>

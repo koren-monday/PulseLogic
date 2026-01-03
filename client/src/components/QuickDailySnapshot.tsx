@@ -3,6 +3,7 @@ import { X, RefreshCw, TrendingUp, TrendingDown, Minus, AlertCircle, Database, Z
 import { fetchGarminData, compareDayToStatistics, calculateAndSaveStatistics } from '../services/api';
 import { getCurrentUserId } from '../utils/storage';
 import { useSubscription } from '../contexts/SubscriptionContext';
+import { LoadingOverlay } from './LoadingOverlay';
 import type { DailyComparison } from '../types';
 
 interface QuickDailySnapshotProps {
@@ -155,7 +156,12 @@ export function QuickDailySnapshot({ onClose }: QuickDailySnapshotProps) {
         </div>
 
         {/* Content */}
-        <div className="p-4 overflow-y-auto max-h-[calc(90vh-120px)]">
+        <div className={`p-4 overflow-y-auto max-h-[calc(90vh-120px)] relative ${loading || updatingStats ? 'min-h-[200px] pointer-events-none' : ''}`}>
+          <LoadingOverlay
+            isLoading={loading || updatingStats}
+            type={updatingStats ? 'syncing' : 'fetching'}
+            message={updatingStats ? 'Calculating baseline statistics...' : undefined}
+          />
           {!canUseSnapshot ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Lock className="w-12 h-12 text-slate-500 mb-4" />
@@ -172,11 +178,6 @@ export function QuickDailySnapshot({ onClose }: QuickDailySnapshotProps) {
                   Upgrade to Pro
                 </button>
               )}
-            </div>
-          ) : loading ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <RefreshCw className="w-8 h-8 text-garmin-blue animate-spin mb-3" />
-              <p className="text-slate-400">Fetching today's data...</p>
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -201,17 +202,8 @@ export function QuickDailySnapshot({ onClose }: QuickDailySnapshotProps) {
                 disabled={updatingStats}
                 className="btn-primary flex items-center gap-2"
               >
-                {updatingStats ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Calculating...
-                  </>
-                ) : (
-                  <>
-                    <Database className="w-4 h-4" />
-                    Create from Last 30 Days
-                  </>
-                )}
+                <Database className="w-4 h-4" />
+                Create from Last 30 Days
               </button>
             </div>
           ) : (
@@ -258,17 +250,8 @@ export function QuickDailySnapshot({ onClose }: QuickDailySnapshotProps) {
                   disabled={updatingStats}
                   className="w-full btn-secondary flex items-center justify-center gap-2 text-sm"
                 >
-                  {updatingStats ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      Updating baseline...
-                    </>
-                  ) : (
-                    <>
-                      <Database className="w-4 h-4" />
-                      Update Baseline (Last 30 Days)
-                    </>
-                  )}
+                  <Database className="w-4 h-4" />
+                  Update Baseline (Last 30 Days)
                 </button>
               </div>
             </div>

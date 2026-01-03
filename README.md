@@ -1,34 +1,41 @@
-# Garmin Insights Engine
+# PulseLogic
 
-A full-stack web application that analyzes your Garmin health data using AI-powered insights from OpenAI, Anthropic, or Google.
+AI-powered Garmin health insights with subscription-based monetization. Available as a web app and Android app.
 
 ## Features
 
-- **Garmin Connect Integration**: Securely authenticate and fetch your health metrics (sleep, stress, body battery, activities, heart rate)
-- **Multi-LLM Support**: Choose between OpenAI GPT-4o, Anthropic Claude 3.5 Sonnet, or Google Gemini 1.5 Pro
-- **AI-Powered Analysis**: Get personalized insights correlating sleep quality, workout intensity, stress patterns, and recovery
-- **Privacy-First**: API keys stored locally in your browser; Garmin credentials never persisted
+- **Garmin Connect Integration**: Securely authenticate and fetch health metrics (sleep, stress, body battery, activities, heart rate)
+- **AI-Powered Analysis**: Get personalized insights using Google Gemini models
+- **Subscription Tiers**: Free tier with limited usage, Pro tier with full access
+- **Cross-Platform**: Web app + Android app (via Capacitor)
+- **Firebase Auth**: Silent authentication layer for user identity
+- **RevenueCat Payments**: Google Play subscription management
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS, TanStack Query |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS, TanStack Query |
 | Backend | Node.js, Express, TypeScript |
-| APIs | garmin-connect, OpenAI SDK, Anthropic SDK, Google Generative AI |
+| Mobile | Capacitor 7, Android |
+| Auth | Firebase Auth (custom tokens) |
+| Payments | RevenueCat |
+| Database | Firebase Firestore |
+| APIs | garmin-connect, Google AI SDK |
 | Package Manager | Yarn (with workspaces) |
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - Yarn 1.22+
 - A Garmin Connect account
-- API key for at least one LLM provider:
-  - [OpenAI API Key](https://platform.openai.com/api-keys)
-  - [Anthropic API Key](https://console.anthropic.com/)
-  - [Google AI API Key](https://makersuite.google.com/app/apikey)
+- Firebase project (for auth + database)
+- RevenueCat account (for payments - Android only)
+- Android Studio (for Android builds)
 
-## Quick Start
+---
+
+## Quick Start (Web)
 
 ### 1. Clone and Install
 
@@ -36,44 +43,225 @@ A full-stack web application that analyzes your Garmin health data using AI-powe
 git clone <repository-url>
 cd PulseLogic
 
-# Install all dependencies (uses yarn workspaces)
+# Install all dependencies
 yarn
 ```
 
 ### 2. Configure Environment
 
-```bash
-# Copy the example environment file
-cp server/.env.example server/.env
+**Server** (`server/.env`):
+```env
+PORT=3002
+NODE_ENV=development
 
-# Edit if needed (defaults work for development)
+# Firebase (required for cloud features)
+FIREBASE_SERVICE_ACCOUNT={"type":"service_account",...}  # JSON string
+# OR place firebase-service-account.json in server/
+
+# RevenueCat (for payment webhooks)
+REVENUECAT_WEBHOOK_SECRET=your_webhook_secret
 ```
 
-The `.env` file supports these variables:
-
+**Client** (`client/.env`):
 ```env
-PORT=3001                      # Server port
-NODE_ENV=development           # Environment mode
-RATE_LIMIT_WINDOW_MS=60000     # Rate limit window (ms)
-RATE_LIMIT_MAX_REQUESTS=100    # Max requests per window
+VITE_API_URL=http://localhost:3002/api
+
+# Firebase Client (optional - enables persistent auth)
+VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+
+# RevenueCat (Android only)
+VITE_REVENUECAT_PUBLIC_KEY=your_public_key
 ```
 
 ### 3. Run the Application
 
 ```bash
-# Start both frontend and backend in development mode
+# Start both frontend and backend
 yarn dev
 ```
 
-This starts:
-- **Backend**: http://localhost:3001
+- **Backend**: http://localhost:3002
 - **Frontend**: http://localhost:5173
 
-### 4. Use the App
+---
 
-1. **Configure**: Enter your Garmin Connect email/password and at least one LLM API key
-2. **Fetch Data**: Select the date range (7/14/30 days) and fetch your health metrics
-3. **Analyze**: Choose an LLM provider and generate AI-powered insights
+## Android Build
+
+### Prerequisites
+
+1. **Android Studio** with SDK 24+ installed
+2. **Java 17+** (bundled with Android Studio)
+3. **Firebase project** with Android app configured
+4. **Google Play Console** account (for publishing)
+5. **RevenueCat** account with Android app configured
+
+### Setup Steps
+
+#### 1. Firebase Setup
+
+1. Go to [Firebase Console](https://console.firebase.google.com)
+2. Create or select your project
+3. Add an Android app:
+   - Package name: `com.pulselogic.app`
+   - Download `google-services.json`
+4. Place `google-services.json` in `client/android/app/`
+
+#### 2. RevenueCat Setup
+
+1. Create project at [RevenueCat](https://www.revenuecat.com)
+2. Add Android app with package ID: `com.pulselogic.app`
+3. Connect to Google Play Console
+4. Create subscription products:
+   - `pulselogic_monthly` - Monthly subscription
+   - `pulselogic_annual` - Annual subscription
+5. Configure entitlement: `pro`
+6. Set up webhook: `POST https://your-server.com/api/webhooks/revenuecat`
+
+#### 3. Environment Variables
+
+Update `client/.env` for Android:
+```env
+# Use 10.0.2.2 for Android emulator to reach localhost
+VITE_API_URL=http://10.0.2.2:3002/api
+
+VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_REVENUECAT_PUBLIC_KEY=your_revenuecat_public_key
+```
+
+#### 4. Build Android App
+
+```bash
+cd client
+
+# Build web assets
+yarn build
+
+# Sync to Android project
+yarn cap:sync
+
+# Open in Android Studio
+yarn cap:open
+```
+
+#### 5. Android Studio
+
+1. Let Gradle sync complete
+2. Connect device or start emulator
+3. Click **Run** to build and install
+
+### Android Scripts
+
+| Command | Description |
+|---------|-------------|
+| `yarn cap:sync` | Sync web assets to Android |
+| `yarn cap:open` | Open project in Android Studio |
+| `yarn build:android` | Build + sync in one command |
+
+### Release Build
+
+1. In Android Studio: **Build > Generate Signed Bundle / APK**
+2. Create or select keystore
+3. Choose **release** build variant
+4. Upload to Google Play Console
+
+---
+
+## Project Structure
+
+```
+PulseLogic/
+├── package.json                 # Monorepo root
+├── server/                      # Express Backend
+│   ├── src/
+│   │   ├── index.ts
+│   │   ├── routes/
+│   │   │   ├── garmin.routes.ts     # Auth + Firebase tokens
+│   │   │   ├── analyze.routes.ts    # AI analysis
+│   │   │   ├── subscription.routes.ts
+│   │   │   └── webhooks.routes.ts   # RevenueCat webhooks
+│   │   └── services/
+│   │       ├── garmin.service.ts
+│   │       ├── firestore.service.ts
+│   │       └── usage.service.ts
+│   └── .env
+│
+├── client/                      # React Frontend
+│   ├── src/
+│   │   ├── App.tsx              # Main app + back button
+│   │   ├── config/
+│   │   │   └── firebase.ts      # Firebase client init
+│   │   ├── contexts/
+│   │   │   ├── AuthContext.tsx
+│   │   │   └── SubscriptionContext.tsx
+│   │   ├── services/
+│   │   │   ├── api.ts
+│   │   │   └── purchases.ts     # RevenueCat wrapper
+│   │   ├── components/
+│   │   │   ├── Header.tsx       # Upgrade button
+│   │   │   └── Paywall.tsx      # Subscription UI
+│   │   └── pages/
+│   │       ├── LoginPage.tsx    # Garmin + Firebase auth
+│   │       ├── DataStep.tsx
+│   │       └── AnalysisStep.tsx
+│   ├── capacitor.config.ts      # Capacitor config
+│   ├── android/                 # Android project
+│   │   ├── app/
+│   │   │   ├── src/main/
+│   │   │   │   └── assets/public/   # Web assets
+│   │   │   ├── build.gradle
+│   │   │   └── google-services.json # Firebase config
+│   │   └── build.gradle
+│   └── .env
+```
+
+---
+
+## Subscription Tiers
+
+| Feature | Free | Pro |
+|---------|------|-----|
+| Reports per week | 1 | Unlimited* |
+| Chat follow-ups | 1 per report | Unlimited* |
+| Daily snapshots | - | 1/day |
+| Data range | 30 days | 360 days |
+| AI model | Basic | Advanced |
+| Report history | Latest only | Full history |
+
+*Pro tier has 10 LLM calls per day limit
+
+---
+
+## API Reference
+
+### Garmin Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/garmin/login` | Authenticate (returns `firebaseToken`) |
+| POST | `/api/garmin/mfa` | Submit MFA code |
+| POST | `/api/garmin/restore` | Restore session from tokens |
+| POST | `/api/garmin/logout` | Clear session |
+| POST | `/api/garmin/data` | Fetch health metrics |
+
+### Subscription Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/subscription/tier` | Get user tier + limits |
+| POST | `/api/subscription/check-report` | Check report limit |
+| POST | `/api/subscription/check-chat` | Check chat limit |
+
+### Webhook Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/webhooks/revenuecat` | RevenueCat subscription events |
+
+---
 
 ## Available Scripts
 
@@ -81,132 +269,117 @@ This starts:
 
 | Command | Description |
 |---------|-------------|
-| `yarn dev` | Start both server and client in dev mode |
-| `yarn dev:server` | Start only the backend server |
-| `yarn dev:client` | Start only the frontend client |
-| `yarn build` | Build both server and client for production |
-| `yarn build:server` | Build only the server |
-| `yarn build:client` | Build only the client |
-| `yarn typecheck` | Type-check the server |
-
-### Using Workspaces
-
-You can run scripts in specific workspaces:
-
-```bash
-# Run a script in the server workspace
-yarn workspace garmin-insights-server <script>
-
-# Run a script in the client workspace
-yarn workspace client <script>
-```
-
-### Server Scripts
-
-| Command | Description |
-|---------|-------------|
-| `yarn workspace garmin-insights-server dev` | Start server with hot reload |
-| `yarn workspace garmin-insights-server build` | Compile TypeScript |
-| `yarn workspace garmin-insights-server start` | Run production server |
-| `yarn workspace garmin-insights-server typecheck` | Type-check only |
+| `yarn dev` | Start server + client |
+| `yarn build` | Build both for production |
+| `yarn build:server` | Build server only |
+| `yarn build:client` | Build client only |
 
 ### Client Scripts
 
 | Command | Description |
 |---------|-------------|
-| `yarn workspace client dev` | Start Vite dev server |
-| `yarn workspace client build` | Build for production |
-| `yarn workspace client preview` | Preview production build |
+| `yarn dev` | Start Vite dev server |
+| `yarn build` | Build for production |
+| `yarn cap:sync` | Sync to Android |
+| `yarn cap:open` | Open in Android Studio |
+| `yarn build:android` | Build + sync |
 
-## Project Structure
+---
+
+## Architecture
+
+### Authentication Flow
 
 ```
-PulseLogic/
-├── package.json                 # Monorepo with yarn workspaces
-├── yarn.lock                    # Yarn lockfile
-├── server/                      # Express Backend
-│   ├── src/
-│   │   ├── index.ts            # Server entry point
-│   │   ├── routes/
-│   │   │   ├── garmin.routes.ts    # Garmin auth & data endpoints
-│   │   │   └── analyze.routes.ts   # LLM analysis endpoint
-│   │   ├── services/
-│   │   │   ├── garmin.service.ts   # Garmin Connect integration
-│   │   │   └── llm/
-│   │   │       ├── provider.interface.ts  # LLM abstraction layer
-│   │   │       ├── openai.provider.ts
-│   │   │       ├── anthropic.provider.ts
-│   │   │       └── google.provider.ts
-│   │   ├── middleware/
-│   │   │   ├── errorHandler.ts     # Global error handling
-│   │   │   └── validate.ts         # Zod request validation
-│   │   └── types/index.ts          # Shared TypeScript types
-│   ├── .env.example
-│   └── tsconfig.json
-│
-└── client/                      # React Frontend
-    ├── src/
-    │   ├── App.tsx             # Main wizard component
-    │   ├── pages/
-    │   │   ├── ConfigStep.tsx      # Step 1: Credentials
-    │   │   ├── DataStep.tsx        # Step 2: Fetch data
-    │   │   └── AnalysisStep.tsx    # Step 3: AI analysis
-    │   ├── components/         # Reusable UI components
-    │   ├── hooks/              # React Query hooks
-    │   ├── services/api.ts     # API client
-    │   └── utils/storage.ts    # Local storage utilities
-    ├── tailwind.config.js
-    └── vite.config.ts
+User                    Client                  Server              Firebase
+  │                        │                       │                    │
+  │ Enter Garmin creds     │                       │                    │
+  │───────────────────────>│                       │                    │
+  │                        │ POST /garmin/login    │                    │
+  │                        │──────────────────────>│                    │
+  │                        │                       │ createCustomToken  │
+  │                        │                       │───────────────────>│
+  │                        │   { firebaseToken }   │<───────────────────│
+  │                        │<──────────────────────│                    │
+  │                        │ signInWithCustomToken │                    │
+  │                        │───────────────────────────────────────────>│
+  │     Logged in          │<───────────────────────────────────────────│
+  │<───────────────────────│                       │                    │
 ```
 
-## API Reference
+### Payment Flow
 
-### Garmin Endpoints
+```
+User                    Client (RevenueCat)     RevenueCat          Server
+  │                        │                       │                   │
+  │ Tap Subscribe          │                       │                   │
+  │───────────────────────>│                       │                   │
+  │                        │ purchasePackage()     │                   │
+  │                        │──────────────────────>│                   │
+  │    Google Play UI      │<──────────────────────│                   │
+  │<───────────────────────│                       │                   │
+  │ Complete purchase      │                       │                   │
+  │───────────────────────>│                       │                   │
+  │                        │    CustomerInfo       │                   │
+  │                        │<──────────────────────│                   │
+  │                        │                       │ POST /webhooks    │
+  │                        │                       │──────────────────>│
+  │                        │                       │  Update Firestore │
+  │   Pro activated        │                       │<──────────────────│
+  │<───────────────────────│                       │                   │
+```
 
-| Method | Endpoint | Description | Body |
-|--------|----------|-------------|------|
-| POST | `/api/garmin/login` | Authenticate with Garmin | `{ username, password }` |
-| POST | `/api/garmin/logout` | Clear session | - |
-| GET | `/api/garmin/status` | Check auth status | - |
-| POST | `/api/garmin/data` | Fetch health metrics | `{ days: 7 }` |
-
-### Analysis Endpoint
-
-| Method | Endpoint | Description | Body |
-|--------|----------|-------------|------|
-| POST | `/api/analyze` | Generate AI analysis | `{ provider, apiKey, healthData, customPrompt? }` |
-
-## Security Considerations
-
-- **Garmin Credentials**: Sent to backend for authentication but never stored; session managed server-side
-- **LLM API Keys**: Stored in browser localStorage with XOR obfuscation (not encryption); sent per-request
-- **Rate Limiting**: 100 requests per minute per IP by default
-- **CORS**: Restricted to localhost in development
-
-For production deployment, consider:
-- Using Redis for session storage
-- Implementing proper encryption for API keys
-- Adding authentication/authorization layer
-- Using HTTPS and secure cookie settings
+---
 
 ## Troubleshooting
 
 ### "Garmin login failed"
-- Verify your Garmin Connect credentials are correct
-- Ensure you don't have 2FA enabled (not supported by unofficial API)
-- Try logging into Garmin Connect website first to unlock your account
+- Verify credentials are correct
+- MFA is supported - enter code when prompted
+- Try logging into connect.garmin.com first
 
-### "No data available"
-- Some metrics require a Garmin device that tracks them
-- Body Battery and Stress require compatible devices (Fenix, Forerunner, Venu, etc.)
-- Sleep data requires wearing the device overnight
-
-### Build errors
+### Android build fails
 ```bash
-# Clear node_modules and reinstall
-rm -rf node_modules
-yarn
+# Clean and rebuild
+cd client/android
+./gradlew clean
+cd ..
+yarn build:android
 ```
+
+### RevenueCat not working
+- Ensure `VITE_REVENUECAT_PUBLIC_KEY` is set
+- Check app is running on real device (not web)
+- Verify products are configured in RevenueCat dashboard
+
+### Firebase auth issues
+- Check Firebase config in `client/.env`
+- Ensure Firebase project has Authentication enabled
+- Server needs valid service account credentials
+
+---
+
+## Deployment
+
+### Server (Render/Railway)
+
+1. Set environment variables:
+   - `NODE_ENV=production`
+   - `FIREBASE_SERVICE_ACCOUNT=<json string>`
+   - `REVENUECAT_WEBHOOK_SECRET=<secret>`
+   - `ALLOWED_ORIGIN=https://your-domain.com`
+
+2. Deploy with `yarn build:server && yarn start`
+
+### Android (Google Play)
+
+1. Generate signed APK/Bundle in Android Studio
+2. Create app listing in Play Console
+3. Upload to internal testing first
+4. Configure in-app products
+5. Promote to production
+
+---
 
 ## License
 

@@ -1,11 +1,33 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
+import { getAuth } from 'firebase-admin/auth';
 import { GarminService, type LoginResult } from '../services/garmin.service.js';
 import { tokensExist } from '../services/token-storage.js';
-import { recordUserLogin } from '../services/firestore.service.js';
+import { recordUserLogin, isFirestoreEnabled } from '../services/firestore.service.js';
 import { validate, AppError } from '../middleware/index.js';
 import { GarminLoginSchema, FetchDataRequestSchema, type ApiResponse, type GarminHealthData } from '../types/index.js';
 import { getMaxDataDays } from '../services/usage.service.js';
+
+/**
+ * Generate a Firebase custom token for client-side auth.
+ * Token includes garminUserId claim for cross-referencing.
+ */
+async function generateFirebaseToken(email: string, garminUserId?: string): Promise<string | undefined> {
+  if (!isFirestoreEnabled()) {
+    return undefined;
+  }
+
+  try {
+    const token = await getAuth().createCustomToken(email, {
+      garminUserId: garminUserId || undefined,
+      provider: 'garmin',
+    });
+    return token;
+  } catch (error) {
+    console.error('Failed to generate Firebase token:', error);
+    return undefined;
+  }
+}
 
 const router = Router();
 
@@ -34,7 +56,7 @@ function getSession(req: Request): { id: string; data: SessionData } {
   return { id: sessionId, data };
 }
 
-// Response type for login that includes MFA info
+// Response type for login that includes MFA info and Firebase token
 interface LoginResponse {
   sessionId: string;
   isAuthenticated: boolean;
@@ -42,6 +64,7 @@ interface LoginResponse {
   userId?: string;
   requiresMFA?: boolean;
   mfaSessionId?: string;
+  firebaseToken?: string; // For client-side Firebase Auth
 }
 
 /**
@@ -67,6 +90,9 @@ router.post(
           console.error('Failed to record login:', err);
         });
 
+        // Generate Firebase custom token for client auth
+        const firebaseToken = await generateFirebaseToken(username, result.session.userId);
+
         res.json({
           success: true,
           data: {
@@ -74,6 +100,7 @@ router.post(
             isAuthenticated: true,
             displayName: result.session.displayName,
             userId: username, // Return email as userId (now the primary identifier)
+            firebaseToken,
           },
         });
       } else if (result.requiresMFA && result.mfaSessionId) {
@@ -124,6 +151,11 @@ router.post(
           });
         }
 
+        // Generate Firebase custom token for client auth
+        const firebaseToken = data.email
+          ? await generateFirebaseToken(data.email, result.session.userId)
+          : undefined;
+
         res.json({
           success: true,
           data: {
@@ -131,6 +163,7 @@ router.post(
             isAuthenticated: true,
             displayName: result.session.displayName,
             userId: data.email, // Return email as userId (now the primary identifier)
+            firebaseToken,
           },
         });
       } else {
@@ -168,6 +201,9 @@ router.post(
           console.error('Failed to record login:', err);
         });
 
+        // Generate Firebase custom token for client auth
+        const firebaseToken = await generateFirebaseToken(email, result.session.userId);
+
         res.json({
           success: true,
           data: {
@@ -175,6 +211,7 @@ router.post(
             isAuthenticated: true,
             displayName: result.session.displayName,
             userId: email, // Return email as userId (now the primary identifier)
+            firebaseToken,
           },
         });
       } else {
