@@ -20,11 +20,31 @@ const PORT = process.env.PORT || 3002;
 // Basic security headers
 app.use(helmet());
 
-// CORS configuration - allow frontend origin
+// CORS configuration - allow frontend and Capacitor origins
+const allowedOrigins = [
+  process.env.ALLOWED_ORIGIN, // Production frontend
+  'capacitor://localhost', // Capacitor iOS
+  'https://localhost', // Capacitor Android
+  'http://localhost', // Capacitor Android (http)
+  'http://localhost:5173', // Dev frontend
+  'http://127.0.0.1:5173',
+  'http://10.0.2.2:5173', // Android emulator
+].filter(Boolean) as string[];
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? process.env.ALLOWED_ORIGIN
-    : ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, same-origin)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      // In production, reject unknown origins; in dev, allow all
+      if (process.env.NODE_ENV === 'production') {
+        callback(new Error('Not allowed by CORS'));
+      } else {
+        callback(null, true);
+      }
+    }
+  },
   credentials: true,
 }));
 
