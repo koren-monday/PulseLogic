@@ -3,9 +3,7 @@ import type {
   GarminCredentials,
   GarminSession,
   GarminHealthData,
-  LLMProvider,
   AnalysisResponse,
-  ModelRegistry,
   ChatMessage,
   ChatResponse,
   LifeContext,
@@ -137,15 +135,25 @@ export async function fetchGarminData(days: number = 7): Promise<GarminHealthDat
 // Analysis API
 // ============================================================================
 
-export async function fetchModelRegistry(): Promise<ModelRegistry> {
-  return apiFetch<ModelRegistry>('/analyze/models');
+export interface ModelInfo {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface ModelsResponse {
+  models: ModelInfo[];
+  serverReady: boolean;
+}
+
+export async function fetchAvailableModels(): Promise<ModelsResponse> {
+  return apiFetch<ModelsResponse>('/analyze/models');
 }
 
 export interface AnalyzeOptions {
-  provider: LLMProvider;
-  apiKey: string;
+  userId: string;
   healthData: GarminHealthData;
-  model?: string;
+  useAdvancedModel?: boolean; // If true and paid tier, use Gemini Pro
   customPrompt?: string;
   lifeContexts?: LifeContext[];
 }
@@ -154,10 +162,9 @@ export async function analyzeHealthData(options: AnalyzeOptions): Promise<Analys
   return apiFetch<AnalysisResponse>('/analyze', {
     method: 'POST',
     body: JSON.stringify({
-      provider: options.provider,
-      apiKey: options.apiKey,
+      userId: options.userId,
       healthData: options.healthData,
-      model: options.model,
+      useAdvancedModel: options.useAdvancedModel,
       customPrompt: options.customPrompt,
       lifeContexts: options.lifeContexts,
     }),
@@ -165,10 +172,10 @@ export async function analyzeHealthData(options: AnalyzeOptions): Promise<Analys
 }
 
 export interface ChatOptions {
-  provider: LLMProvider;
-  apiKey: string;
+  userId: string;
+  reportId: string;
   healthData: GarminHealthData;
-  model?: string;
+  useAdvancedModel?: boolean;
   messages: ChatMessage[];
 }
 
@@ -176,30 +183,26 @@ export async function chatAboutHealth(options: ChatOptions): Promise<ChatRespons
   return apiFetch<ChatResponse>('/analyze/chat', {
     method: 'POST',
     body: JSON.stringify({
-      provider: options.provider,
-      apiKey: options.apiKey,
+      userId: options.userId,
+      reportId: options.reportId,
       healthData: options.healthData,
-      model: options.model,
+      useAdvancedModel: options.useAdvancedModel,
       messages: options.messages,
     }),
   });
 }
 
 export interface DailyInsightOptions {
-  provider: LLMProvider;
-  apiKey: string;
+  userId: string;
   healthData: GarminHealthData;
-  model?: string;
 }
 
 export async function generateDailyInsight(options: DailyInsightOptions): Promise<DailyInsightResponse> {
   return apiFetch<DailyInsightResponse>('/analyze/daily-insight', {
     method: 'POST',
     body: JSON.stringify({
-      provider: options.provider,
-      apiKey: options.apiKey,
+      userId: options.userId,
       healthData: options.healthData,
-      model: options.model,
     }),
   });
 }
@@ -216,18 +219,8 @@ export async function checkApiHealth(): Promise<{ status: string; timestamp: str
 // Cloud Sync API
 // ============================================================================
 
-export interface CloudUserSettings {
-  provider: 'openai' | 'anthropic' | 'google';
-  model: string;
-  apiKeys: {
-    openai?: string;
-    anthropic?: string;
-    google?: string;
-  };
-}
-
+// Cloud user data now only contains life contexts (no LLM settings - server manages keys)
 export interface CloudUserData {
-  settings?: CloudUserSettings;
   lifeContexts?: unknown[];
   updatedAt?: string;
 }
@@ -240,13 +233,6 @@ export async function fetchCloudUserData(userId: string): Promise<CloudUserData>
   return apiFetch<CloudUserData>('/user/data', {
     method: 'POST',
     body: JSON.stringify({ userId }),
-  });
-}
-
-export async function saveCloudSettings(userId: string, settings: CloudUserSettings): Promise<void> {
-  await apiFetch('/user/settings', {
-    method: 'POST',
-    body: JSON.stringify({ userId, settings }),
   });
 }
 
@@ -265,7 +251,6 @@ export interface CloudReport {
   id: string;
   createdAt: string;
   dateRange: { start: string; end: string };
-  provider: string;
   model: string;
   markdown: string;
   structured: unknown;
@@ -398,4 +383,76 @@ export async function compareDayToStatistics(
     method: 'POST',
     body: JSON.stringify({ userId, todayData }),
   });
+}
+
+// ============================================================================
+// Subscription API
+// ============================================================================
+
+import type {
+  SubscriptionTier,
+  TierLimits,
+} from '../types/subscription';
+
+export interface SubscriptionTierInfo {
+  tier: SubscriptionTier;
+  limits: TierLimits;
+  usage: {
+    reportsRemaining: number;
+    chatEnabled: boolean;
+    llmCommunicationsRemaining?: number; // For paid tier
+    snapshotEnabled: boolean;
+    snapshotsRemaining: number;
+  };
+  maxDataDays: number;
+  subscription: {
+    status: string;
+    currentPeriodEnd?: string;
+    cancelAtPeriodEnd?: boolean;
+  };
+  serverReady: boolean;
+  availableModels: ModelInfo[];
+}
+
+export interface LimitCheckResult {
+  allowed: boolean;
+  reason?: string;
+  remaining?: number | 'unlimited';
+  upgradeRequired?: boolean;
+}
+
+export async function fetchSubscriptionTier(userId: string): Promise<SubscriptionTierInfo> {
+  return apiFetch<SubscriptionTierInfo>('/subscription/tier', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function checkReportLimit(userId: string): Promise<LimitCheckResult> {
+  return apiFetch<LimitCheckResult>('/subscription/check-report', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function checkChatLimit(userId: string, reportId: string): Promise<LimitCheckResult> {
+  return apiFetch<LimitCheckResult>('/subscription/check-chat', {
+    method: 'POST',
+    body: JSON.stringify({ userId, reportId }),
+  });
+}
+
+export async function checkSnapshotLimit(userId: string): Promise<LimitCheckResult> {
+  return apiFetch<LimitCheckResult>('/subscription/check-snapshot', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function getMaxDataDays(userId: string): Promise<number> {
+  const result = await apiFetch<{ maxDays: number }>('/subscription/max-days', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+  return result.maxDays;
 }

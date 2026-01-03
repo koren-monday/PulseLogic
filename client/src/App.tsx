@@ -9,6 +9,7 @@ import { ReportViewer } from './components/ReportViewer';
 import { ActionTracker } from './components/ActionTracker';
 import { TrendComparison } from './components/TrendComparison';
 import { QuickDailySnapshot } from './components/QuickDailySnapshot';
+import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import {
   getUserSettings,
   storeUserSettings,
@@ -17,7 +18,7 @@ import {
   clearSession,
   type UserSettings,
 } from './utils/storage';
-import { syncOnLogin, pushSettingsToCloud, syncReportsAndActionsOnLogin } from './services/sync.service';
+import { syncOnLogin, syncReportsAndActionsOnLogin } from './services/sync.service';
 import { clearAllData } from './services/storage.service';
 import type { GarminHealthData } from './types';
 import type { SavedReport } from './db/schema';
@@ -38,10 +39,9 @@ function App() {
   const [viewingReport, setViewingReport] = useState<SavedReport | null>(null);
 
   // User settings (loaded after login)
+  // Note: With simplified tiers, settings only include model preference
   const [userSettings, setUserSettings] = useState<UserSettings>({
-    selectedProvider: 'openai',
-    selectedModel: 'gpt-5.2',
-    apiKeys: {},
+    preferAdvancedModel: false,
   });
 
   // Check for existing session on mount
@@ -60,19 +60,13 @@ function App() {
     setDisplayName(newDisplayName);
     storeCurrentUserId(newUserId);
 
-    // Sync with cloud and get merged settings
+    // Sync with cloud (only life contexts now - no API key settings)
     const syncedSettings = await syncOnLogin(newUserId);
     setUserSettings(syncedSettings);
     setIsLoggedIn(true);
 
     // Sync reports and actions from cloud in background
     syncReportsAndActionsOnLogin(newUserId);
-
-    // Check if user has API key configured, if not show settings
-    const hasApiKey = Object.values(syncedSettings.apiKeys).some(Boolean);
-    if (!hasApiKey) {
-      setShowSettings(true);
-    }
   };
 
   const handleLogout = async () => {
@@ -85,9 +79,7 @@ function App() {
     setCurrentStep('data');
     setHealthData(null);
     setUserSettings({
-      selectedProvider: 'openai',
-      selectedModel: 'gpt-5.2',
-      apiKeys: {},
+      preferAdvancedModel: false,
     });
   };
 
@@ -95,8 +87,7 @@ function App() {
     if (userId) {
       storeUserSettings(userId, newSettings);
       setUserSettings(newSettings);
-      // Sync to cloud in background
-      pushSettingsToCloud(userId, newSettings);
+      // Note: Settings are now stored locally only (no cloud sync needed for preferences)
     }
   };
 
@@ -117,81 +108,87 @@ function App() {
 
   // Main app content (logged in)
   return (
-    <div className="min-h-screen bg-slate-900">
-      <div className="max-w-3xl mx-auto px-4 pb-12">
-        <Header
-          displayName={displayName}
-          onSnapshotClick={() => setShowSnapshot(true)}
-          onHistoryClick={() => {
-            setViewingReport(null);
-            setCurrentStep('history');
-          }}
-          onActionsClick={() => setCurrentStep('actions')}
-          onTrendsClick={() => setCurrentStep('trends')}
-          onSettingsClick={() => setShowSettings(true)}
-          onLogout={handleLogout}
-        />
-
-        {currentStep === 'data' && (
-          <DataStep
-            onComplete={handleDataComplete}
-            onBack={handleLogout}
-            userSettings={userSettings}
+    <SubscriptionProvider userId={userId}>
+      <div className="min-h-screen bg-slate-900">
+        <div className="max-w-3xl mx-auto px-4 pb-12">
+          <Header
+            displayName={displayName}
+            onSnapshotClick={() => setShowSnapshot(true)}
+            onHistoryClick={() => {
+              setViewingReport(null);
+              setCurrentStep('history');
+            }}
+            onActionsClick={() => setCurrentStep('actions')}
+            onTrendsClick={() => setCurrentStep('trends')}
+            onSettingsClick={() => setShowSettings(true)}
+            onLogout={handleLogout}
           />
-        )}
 
-        {currentStep === 'analysis' && healthData && (
-          <AnalysisStep
-            healthData={healthData}
-            selectedProvider={userSettings.selectedProvider}
-            selectedModel={userSettings.selectedModel}
-            userSettings={userSettings}
-            onBack={() => setCurrentStep('data')}
-            onReset={handleReset}
-          />
-        )}
-
-        {currentStep === 'history' && (
-          viewingReport ? (
-            <ReportViewer
-              report={viewingReport}
-              onClose={() => setViewingReport(null)}
+          {currentStep === 'data' && userId && (
+            <DataStep
+              onComplete={handleDataComplete}
+              onBack={handleLogout}
+              userId={userId}
+              preferAdvancedModel={userSettings.preferAdvancedModel}
             />
-          ) : (
-            <div className="space-y-6">
-              <ReportHistory
-                onViewReport={(report) => setViewingReport(report)}
+          )}
+
+          {currentStep === 'analysis' && healthData && userId && (
+            <AnalysisStep
+              healthData={healthData}
+              userId={userId}
+              preferAdvancedModel={userSettings.preferAdvancedModel}
+              onBack={() => setCurrentStep('data')}
+              onReset={handleReset}
+              onOpenSettings={() => setShowSettings(true)}
+            />
+          )}
+
+          {currentStep === 'history' && (
+            viewingReport ? (
+              <ReportViewer
+                report={viewingReport}
+                onClose={() => setViewingReport(null)}
               />
-              <button
-                className="btn-secondary w-full"
-                onClick={() => setCurrentStep('data')}
-              >
-                Back to New Analysis
-              </button>
-            </div>
-          )
-        )}
+            ) : (
+              <div className="space-y-6">
+                <ReportHistory
+                  onViewReport={(report) => setViewingReport(report)}
+                />
+                <button
+                  className="btn-secondary w-full"
+                  onClick={() => setCurrentStep('data')}
+                >
+                  Back to New Analysis
+                </button>
+              </div>
+            )
+          )}
 
-        {currentStep === 'actions' && (
-          <ActionTracker onClose={() => setCurrentStep('data')} />
-        )}
+          {currentStep === 'actions' && (
+            <ActionTracker onClose={() => setCurrentStep('data')} />
+          )}
 
-        {currentStep === 'trends' && (
-          <TrendComparison onClose={() => setCurrentStep('data')} />
-        )}
+          {currentStep === 'trends' && (
+            <TrendComparison onClose={() => setCurrentStep('data')} />
+          )}
 
-        <SettingsModal
-          isOpen={showSettings}
-          onClose={() => setShowSettings(false)}
-          settings={userSettings}
-          onSave={handleSettingsSave}
-        />
+          {userId && (
+            <SettingsModal
+              isOpen={showSettings}
+              onClose={() => setShowSettings(false)}
+              userId={userId}
+              settings={userSettings}
+              onSave={handleSettingsSave}
+            />
+          )}
 
-        {showSnapshot && (
-          <QuickDailySnapshot onClose={() => setShowSnapshot(false)} />
-        )}
+          {showSnapshot && (
+            <QuickDailySnapshot onClose={() => setShowSnapshot(false)} />
+          )}
+        </div>
       </div>
-    </div>
+    </SubscriptionProvider>
   );
 }
 

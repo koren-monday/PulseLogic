@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X, RefreshCw, TrendingUp, TrendingDown, Minus, AlertCircle, Database, Zap } from 'lucide-react';
+import { X, RefreshCw, TrendingUp, TrendingDown, Minus, AlertCircle, Database, Zap, Lock } from 'lucide-react';
 import { fetchGarminData, compareDayToStatistics, calculateAndSaveStatistics } from '../services/api';
 import { getCurrentUserId } from '../utils/storage';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import type { DailyComparison } from '../types';
 
 interface QuickDailySnapshotProps {
@@ -9,6 +10,7 @@ interface QuickDailySnapshotProps {
 }
 
 export function QuickDailySnapshot({ onClose }: QuickDailySnapshotProps) {
+  const { canUseSnapshot, snapshotsRemaining, tier } = useSubscription();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [comparisons, setComparisons] = useState<DailyComparison[]>([]);
@@ -73,8 +75,12 @@ export function QuickDailySnapshot({ onClose }: QuickDailySnapshotProps) {
   };
 
   useEffect(() => {
-    fetchSnapshot();
-  }, []);
+    if (canUseSnapshot) {
+      fetchSnapshot();
+    } else {
+      setLoading(false);
+    }
+  }, [canUseSnapshot]);
 
   const getTrendIcon = (trend: 'better' | 'worse' | 'same') => {
     switch (trend) {
@@ -124,6 +130,11 @@ export function QuickDailySnapshot({ onClose }: QuickDailySnapshotProps) {
           <div className="flex items-center gap-2">
             <Zap className="w-5 h-5 text-yellow-400" />
             <h2 className="text-lg font-semibold text-white">Daily Snapshot</h2>
+            {canUseSnapshot && snapshotsRemaining !== undefined && (
+              <span className="text-xs bg-slate-700 px-2 py-0.5 rounded-full text-slate-300">
+                {snapshotsRemaining} left today
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -145,7 +156,24 @@ export function QuickDailySnapshot({ onClose }: QuickDailySnapshotProps) {
 
         {/* Content */}
         <div className="p-4 overflow-y-auto max-h-[calc(90vh-120px)]">
-          {loading ? (
+          {!canUseSnapshot ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Lock className="w-12 h-12 text-slate-500 mb-4" />
+              <h3 className="text-white font-medium mb-2">Feature Locked</h3>
+              <p className="text-slate-400 text-sm mb-4">
+                {tier === 'free' ? (
+                  <>Daily Snapshot is a Pro feature. Upgrade to compare your daily metrics against your personal baselines.</>
+                ) : (
+                  <>You've used your daily snapshot. Try again tomorrow or add your own API key for unlimited access.</>
+                )}
+              </p>
+              {tier === 'free' && (
+                <button className="btn-primary">
+                  Upgrade to Pro
+                </button>
+              )}
+            </div>
+          ) : loading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <RefreshCw className="w-8 h-8 text-garmin-blue animate-spin mb-3" />
               <p className="text-slate-400">Fetching today's data...</p>

@@ -1,7 +1,6 @@
 import {
   checkSyncStatus,
   fetchCloudUserData,
-  saveCloudSettings,
   saveCloudLifeContexts,
   fetchCloudReports,
   fetchCloudActions,
@@ -9,13 +8,11 @@ import {
   saveCloudActions,
   updateCloudAction,
   deleteCloudReport,
-  type CloudUserSettings,
   type CloudReport,
   type CloudAction,
 } from './api';
 import {
   getUserSettings,
-  storeUserSettings,
   getLifeContexts,
   storeLifeContexts,
   type UserSettings,
@@ -40,6 +37,7 @@ export async function isSyncEnabled(): Promise<boolean> {
 }
 
 // Sync user data from cloud on login
+// Note: With simplified tiers, only life contexts are synced (no API keys/settings)
 export async function syncOnLogin(userId: string): Promise<UserSettings> {
   const localSettings = getUserSettings(userId);
   const localContexts = getLifeContexts(userId);
@@ -51,57 +49,18 @@ export async function syncOnLogin(userId: string): Promise<UserSettings> {
   try {
     const cloudData = await fetchCloudUserData(userId);
 
-    // If cloud has data, prefer it (cloud is source of truth)
-    if (cloudData.settings) {
-      const mergedSettings: UserSettings = {
-        selectedProvider: cloudData.settings.provider || localSettings.selectedProvider,
-        selectedModel: cloudData.settings.model || localSettings.selectedModel,
-        apiKeys: {
-          ...localSettings.apiKeys,
-          ...cloudData.settings.apiKeys,
-        },
-      };
-
-      // Save merged to local
-      storeUserSettings(userId, mergedSettings);
-
-      // Sync life contexts if cloud has them
-      if (cloudData.lifeContexts && cloudData.lifeContexts.length > 0) {
-        storeLifeContexts(userId, cloudData.lifeContexts as LifeContext[]);
-      } else if (localContexts.length > 0) {
-        // Push local contexts to cloud if cloud is empty
-        await saveCloudLifeContexts(userId, localContexts);
-      }
-
-      return mergedSettings;
-    } else if (hasAnySettings(localSettings)) {
-      // Cloud is empty but local has data - push to cloud
-      await pushSettingsToCloud(userId, localSettings);
-      if (localContexts.length > 0) {
-        await saveCloudLifeContexts(userId, localContexts);
-      }
+    // Sync life contexts from cloud if available
+    if (cloudData.lifeContexts && cloudData.lifeContexts.length > 0) {
+      storeLifeContexts(userId, cloudData.lifeContexts as LifeContext[]);
+    } else if (localContexts.length > 0) {
+      // Push local contexts to cloud if cloud is empty
+      await saveCloudLifeContexts(userId, localContexts);
     }
 
     return localSettings;
   } catch (error) {
     console.warn('Cloud sync failed, using local data:', error);
     return localSettings;
-  }
-}
-
-// Push settings to cloud (call after local save)
-export async function pushSettingsToCloud(userId: string, settings: UserSettings): Promise<void> {
-  if (!(await isSyncEnabled())) return;
-
-  try {
-    const cloudSettings: CloudUserSettings = {
-      provider: settings.selectedProvider,
-      model: settings.selectedModel,
-      apiKeys: settings.apiKeys,
-    };
-    await saveCloudSettings(userId, cloudSettings);
-  } catch (error) {
-    console.warn('Failed to sync settings to cloud:', error);
   }
 }
 
@@ -114,10 +73,6 @@ export async function pushLifeContextsToCloud(userId: string, contexts: LifeCont
   } catch (error) {
     console.warn('Failed to sync life contexts to cloud:', error);
   }
-}
-
-function hasAnySettings(settings: UserSettings): boolean {
-  return Object.values(settings.apiKeys).some(Boolean);
 }
 
 // ============================================================================
@@ -152,7 +107,6 @@ export async function syncReportsAndActionsOnLogin(userId: string): Promise<void
           id: cloudReport.id,
           createdAt: cloudReport.createdAt,
           dateRange: cloudReport.dateRange,
-          provider: cloudReport.provider as SavedReport['provider'],
           model: cloudReport.model,
           markdown: cloudReport.markdown,
           structured: cloudReport.structured as StructuredAnalysis,
@@ -216,7 +170,6 @@ export async function pushReportToCloud(userId: string, report: SavedReport): Pr
       id: report.id,
       createdAt: report.createdAt,
       dateRange: report.dateRange,
-      provider: report.provider,
       model: report.model,
       markdown: report.markdown,
       structured: report.structured,

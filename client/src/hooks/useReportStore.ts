@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as storage from '../services/storage.service';
-import type { LLMProvider, GarminHealthData, LifeContext, StructuredAnalysis } from '../types';
+import type { GarminHealthData, LifeContext, StructuredAnalysis } from '../types';
 
 // ============================================================================
 // Report Hooks
@@ -34,7 +34,6 @@ export function useSaveReport() {
   return useMutation({
     mutationFn: (params: {
       dateRange: { start: string; end: string };
-      provider: LLMProvider;
       model: string;
       markdown: string;
       structured: StructuredAnalysis;

@@ -1,40 +1,48 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { analyzeHealthData, chatAboutHealth, fetchModelRegistry, generateDailyInsight } from '../services/api';
-import type { GarminHealthData, LLMProvider, ChatMessage, LifeContext } from '../types';
+import {
+  analyzeHealthData,
+  chatAboutHealth,
+  fetchAvailableModels,
+  generateDailyInsight,
+} from '../services/api';
+import type { GarminHealthData, ChatMessage, LifeContext } from '../types';
 
 interface AnalyzeParams {
-  provider: LLMProvider;
-  apiKey: string;
+  userId: string;
   healthData: GarminHealthData;
-  model?: string;
+  useAdvancedModel?: boolean;
   customPrompt?: string;
   lifeContexts?: LifeContext[];
 }
 
 interface ChatParams {
-  provider: LLMProvider;
-  apiKey: string;
+  userId: string;
+  reportId: string;
   healthData: GarminHealthData;
-  model?: string;
+  useAdvancedModel?: boolean;
   messages: ChatMessage[];
 }
 
-export function useModelRegistry() {
+interface DailyInsightParams {
+  userId: string;
+  healthData: GarminHealthData;
+}
+
+export function useAvailableModels() {
   return useQuery({
-    queryKey: ['modelRegistry'],
-    queryFn: fetchModelRegistry,
+    queryKey: ['availableModels'],
+    queryFn: fetchAvailableModels,
     staleTime: 1000 * 60 * 60, // 1 hour - models don't change often
   });
 }
 
 export function useAnalysis() {
   return useMutation({
-    mutationFn: ({ provider, apiKey, healthData, model, customPrompt, lifeContexts }: AnalyzeParams) =>
+    mutationFn: ({ userId, healthData, useAdvancedModel, customPrompt, lifeContexts }: AnalyzeParams) =>
       analyzeHealthData({
-        provider,
-        apiKey,
+        userId,
         healthData,
-        model,
+        useAdvancedModel,
         customPrompt,
         lifeContexts,
       }),
@@ -43,32 +51,23 @@ export function useAnalysis() {
 
 export function useChat() {
   return useMutation({
-    mutationFn: ({ provider, apiKey, healthData, model, messages }: ChatParams) =>
+    mutationFn: ({ userId, reportId, healthData, useAdvancedModel, messages }: ChatParams) =>
       chatAboutHealth({
-        provider,
-        apiKey,
+        userId,
+        reportId,
         healthData,
-        model,
+        useAdvancedModel,
         messages,
       }),
   });
 }
 
-interface DailyInsightParams {
-  provider: LLMProvider;
-  apiKey: string;
-  healthData: GarminHealthData;
-  model?: string;
-}
-
 export function useDailyInsightGeneration() {
   return useMutation({
-    mutationFn: ({ provider, apiKey, healthData, model }: DailyInsightParams) =>
+    mutationFn: ({ userId, healthData }: DailyInsightParams) =>
       generateDailyInsight({
-        provider,
-        apiKey,
+        userId,
         healthData,
-        model,
       }),
   });
 }

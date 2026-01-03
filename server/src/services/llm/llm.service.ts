@@ -1,31 +1,28 @@
 import { generateText } from 'ai';
 import type { GarminHealthData, ChatMessage, LifeContext, StructuredAnalysis } from '../../types/index.js';
-import { createModel, getDefaultModel, isValidModel, type LLMProvider } from './models.js';
+import { createModel } from './models.js';
+import { GEMINI_MODELS, type SubscriptionTier } from '../../types/subscription.js';
 import { buildSystemPrompt, buildUserPrompt, buildChatSystemPrompt, buildDailyInsightSystemPrompt, buildDailyInsightUserPrompt } from './provider.interface.js';
 import { parseAnalysisResponse } from './response-parser.js';
 
 export interface AnalyzeOptions {
-  provider: LLMProvider;
-  apiKey: string;
+  tier: SubscriptionTier;
   healthData: GarminHealthData;
-  model?: string;
+  useAdvancedModel?: boolean; // If true and paid tier, use Gemini Pro
   customPrompt?: string;
   lifeContexts?: LifeContext[];
 }
 
 export interface ChatOptions {
-  provider: LLMProvider;
-  apiKey: string;
+  tier: SubscriptionTier;
   healthData: GarminHealthData;
-  model?: string;
+  useAdvancedModel?: boolean;
   messages: ChatMessage[];
 }
 
 export interface DailyInsightOptions {
-  provider: LLMProvider;
-  apiKey: string;
+  tier: SubscriptionTier;
   healthData: GarminHealthData;
-  model?: string;
 }
 
 export interface DailyInsightComparison {
@@ -51,7 +48,6 @@ export interface DailyInsightData {
 export interface DailyInsightResult {
   insight: DailyInsightData | null;
   model: string;
-  provider: LLMProvider;
   tokensUsed?: number;
   error?: string;
 }
@@ -60,27 +56,33 @@ export interface AnalysisResult {
   content: string;
   structured?: StructuredAnalysis;
   model: string;
-  provider: LLMProvider;
   tokensUsed?: number;
 }
 
 /**
+ * Determine which model to use based on tier and preference.
+ */
+function getModelForRequest(tier: SubscriptionTier, useAdvancedModel?: boolean): string {
+  // Free tier always uses Flash
+  if (tier === 'free') {
+    return GEMINI_MODELS.FLASH;
+  }
+  // Paid tier can choose Pro if requested
+  return useAdvancedModel ? GEMINI_MODELS.PRO : GEMINI_MODELS.FLASH;
+}
+
+/**
  * Unified LLM service using Vercel AI SDK.
- * Provides consistent interface across OpenAI, Anthropic, and Google.
+ * Uses server-provided Gemini API keys based on user's tier.
  */
 export async function analyzeHealthData(options: AnalyzeOptions): Promise<AnalysisResult> {
-  const { provider, apiKey, healthData, customPrompt, lifeContexts } = options;
+  const { tier, healthData, customPrompt, lifeContexts, useAdvancedModel } = options;
 
-  // Use specified model or fall back to provider default
-  const modelId = options.model || getDefaultModel(provider);
+  // Determine which model to use
+  const modelId = getModelForRequest(tier, useAdvancedModel);
 
-  // Validate model exists for this provider
-  if (options.model && !isValidModel(provider, options.model)) {
-    throw new Error(`Invalid model "${options.model}" for provider "${provider}"`);
-  }
-
-  // Create the model instance with the API key
-  const model = createModel(provider, modelId, apiKey);
+  // Create the model instance with server-provided API key
+  const model = createModel(tier, modelId);
 
   // Generate the analysis using AI SDK
   const result = await generateText({
@@ -102,7 +104,6 @@ export async function analyzeHealthData(options: AnalyzeOptions): Promise<Analys
     content: markdown,
     structured: structured || undefined,
     model: modelId,
-    provider,
     tokensUsed: result.usage?.totalTokens,
   };
 }
@@ -112,15 +113,10 @@ export async function analyzeHealthData(options: AnalyzeOptions): Promise<Analys
  * Maintains context from previous messages for follow-up questions.
  */
 export async function chatAboutHealth(options: ChatOptions): Promise<AnalysisResult> {
-  const { provider, apiKey, healthData, messages } = options;
+  const { tier, healthData, messages, useAdvancedModel } = options;
 
-  const modelId = options.model || getDefaultModel(provider);
-
-  if (options.model && !isValidModel(provider, options.model)) {
-    throw new Error(`Invalid model "${options.model}" for provider "${provider}"`);
-  }
-
-  const model = createModel(provider, modelId, apiKey);
+  const modelId = getModelForRequest(tier, useAdvancedModel);
+  const model = createModel(tier, modelId);
 
   // Build messages array for the AI SDK
   const aiMessages = messages.map((msg) => ({
@@ -139,7 +135,6 @@ export async function chatAboutHealth(options: ChatOptions): Promise<AnalysisRes
   return {
     content: result.text,
     model: modelId,
-    provider,
     tokensUsed: result.usage?.totalTokens,
   };
 }
@@ -147,17 +142,14 @@ export async function chatAboutHealth(options: ChatOptions): Promise<AnalysisRes
 /**
  * Generate a daily insight comparing the last day to period averages.
  * This is a separate, lighter LLM call focused on a quick daily snapshot.
+ * Always uses Flash model (cost-effective for quick insights).
  */
 export async function generateDailyInsight(options: DailyInsightOptions): Promise<DailyInsightResult> {
-  const { provider, apiKey, healthData } = options;
+  const { tier, healthData } = options;
 
-  const modelId = options.model || getDefaultModel(provider);
-
-  if (options.model && !isValidModel(provider, options.model)) {
-    throw new Error(`Invalid model "${options.model}" for provider "${provider}"`);
-  }
-
-  const model = createModel(provider, modelId, apiKey);
+  // Daily insights always use Flash (fast and cheap)
+  const modelId = GEMINI_MODELS.FLASH;
+  const model = createModel(tier, modelId);
 
   try {
     const result = await generateText({
@@ -192,7 +184,6 @@ export async function generateDailyInsight(options: DailyInsightOptions): Promis
     return {
       insight: insightData,
       model: modelId,
-      provider,
       tokensUsed: result.usage?.totalTokens,
       error: parseError,
     };
@@ -201,7 +192,6 @@ export async function generateDailyInsight(options: DailyInsightOptions): Promis
     return {
       insight: null,
       model: modelId,
-      provider,
       error: message,
     };
   }

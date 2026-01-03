@@ -4,13 +4,16 @@ export type { AnalyzeOptions, AnalysisResult } from './llm.service.js';
 
 // Model registry exports
 export {
-  MODEL_REGISTRY,
+  AVAILABLE_MODELS,
   createModel,
-  getDefaultModel,
   isValidModel,
-  type LLMProvider,
+  getModelInfo,
+  isAdvancedModel,
+  hasServerKeys,
+  hasFreeKey,
+  hasPaidKey,
+  getApiKeyForTier,
   type ModelInfo,
-  type ProviderConfig,
 } from './models.js';
 
 // Prompt building utilities

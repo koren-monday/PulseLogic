@@ -14,7 +14,6 @@ import type {
   Insight,
   GarminHealthData,
   LifeContext,
-  LLMProvider,
 } from '../types';
 import { getCurrentUserId } from '../utils/storage';
 import {
@@ -30,7 +29,6 @@ import {
 
 export async function saveReport(params: {
   dateRange: { start: string; end: string };
-  provider: LLMProvider;
   model: string;
   markdown: string;
   structured: StructuredAnalysis;

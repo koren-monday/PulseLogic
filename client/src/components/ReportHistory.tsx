@@ -92,7 +92,7 @@ export function ReportHistory({ onViewReport, compact = false }: ReportHistoryPr
                     {formatDateRange(report.dateRange.start, report.dateRange.end)}
                   </div>
                   <div className="text-xs text-slate-400">
-                    {report.model} via {report.provider}
+                    {report.model}
                   </div>
                 </div>
               </div>

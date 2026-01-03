@@ -1,5 +1,5 @@
 export { useGarminStatus, useGarminLogin, useGarminMFA, useGarminRestore, useGarminLogout, useGarminData } from './useGarmin';
-export { useAnalysis, useChat, useModelRegistry, useDailyInsightGeneration } from './useAnalysis';
+export { useAnalysis, useChat, useAvailableModels, useDailyInsightGeneration } from './useAnalysis';
 
 // Storage & Engagement Hooks
 export { useReportHistory, useReport, useLatestReport, useSaveReport, useDeleteReport } from './useReportStore';

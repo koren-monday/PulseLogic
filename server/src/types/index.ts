@@ -4,6 +4,9 @@ import type { StructuredAnalysis } from './structured-analysis.js';
 // Re-export structured analysis types
 export * from './structured-analysis.js';
 
+// Re-export subscription types
+export * from './subscription.js';
+
 // ============================================================================
 // Garmin Types
 // ============================================================================
@@ -80,16 +83,11 @@ export interface GarminHealthData {
 }
 
 // ============================================================================
-// LLM Types
+// LLM Types (Simplified - server provides all keys)
 // ============================================================================
 
-export type LLMProvider = 'openai' | 'anthropic' | 'google';
-
-export interface LLMConfig {
-  provider: LLMProvider;
-  apiKey: string;
-  model?: string;
-}
+// Legacy type kept for compatibility during transition
+export type LLMProvider = 'google';
 
 // ============================================================================
 // Life Context Types - Personal circumstances affecting health metrics
@@ -190,16 +188,14 @@ export type LifeContext =
   | OtherContext;
 
 export interface AnalysisRequest {
-  provider: LLMProvider;
-  apiKey: string;
+  userId: string;
   healthData: GarminHealthData;
-  model?: string;
+  useAdvancedModel?: boolean; // If true and paid tier, use Gemini Pro
   customPrompt?: string;
   lifeContexts?: LifeContext[];
 }
 
 export interface AnalysisResponse {
-  provider: LLMProvider;
   model: string;
   analysis: string;
   structured?: StructuredAnalysis;
@@ -213,15 +209,14 @@ export interface ChatMessage {
 }
 
 export interface ChatRequest {
-  provider: LLMProvider;
-  apiKey: string;
+  userId: string;
+  reportId: string;
   healthData: GarminHealthData;
-  model?: string;
+  useAdvancedModel?: boolean;
   messages: ChatMessage[];
 }
 
 export interface ChatResponse {
-  provider: LLMProvider;
   model: string;
   message: string;
   tokensUsed?: number;
@@ -249,14 +244,11 @@ export interface DailyInsightData {
 }
 
 export interface DailyInsightRequest {
-  provider: LLMProvider;
-  apiKey: string;
+  userId: string;
   healthData: GarminHealthData;
-  model?: string;
 }
 
 export interface DailyInsightResponse {
-  provider: LLMProvider;
   model: string;
   insight: DailyInsightData | null;
   tokensUsed?: number;
@@ -278,27 +270,29 @@ export const LifeContextSchema = z.object({
   type: z.enum(['new_baby', 'pregnancy', 'diet_change', 'stress_event', 'illness', 'travel', 'training_goal', 'medication', 'other']),
 }).passthrough(); // Allow additional fields per context type
 
-export const AnalyzeRequestSchema = z.object({
-  provider: z.enum(['openai', 'anthropic', 'google']),
-  apiKey: z.string().min(1, 'API key required'),
-  healthData: z.object({
-    dateRange: z.object({
-      start: z.string(),
-      end: z.string(),
-    }),
-    sleep: z.array(z.any()),
-    stress: z.array(z.any()),
-    bodyBattery: z.array(z.any()),
-    activities: z.array(z.any()),
-    heartRate: z.array(z.any()),
+// Health data schema used across multiple endpoints
+const HealthDataSchema = z.object({
+  dateRange: z.object({
+    start: z.string(),
+    end: z.string(),
   }),
-  model: z.string().optional(),
+  sleep: z.array(z.any()),
+  stress: z.array(z.any()),
+  bodyBattery: z.array(z.any()),
+  activities: z.array(z.any()),
+  heartRate: z.array(z.any()),
+});
+
+export const AnalyzeRequestSchema = z.object({
+  userId: z.string().min(1, 'userId required'),
+  healthData: HealthDataSchema,
+  useAdvancedModel: z.boolean().optional(),
   customPrompt: z.string().optional(),
   lifeContexts: z.array(LifeContextSchema).optional(),
 });
 
 export const FetchDataRequestSchema = z.object({
-  days: z.number().min(1).max(180).default(7),
+  days: z.number().min(1).max(360).default(7),
 });
 
 export const ChatMessageSchema = z.object({
@@ -307,38 +301,16 @@ export const ChatMessageSchema = z.object({
 });
 
 export const ChatRequestSchema = z.object({
-  provider: z.enum(['openai', 'anthropic', 'google']),
-  apiKey: z.string().min(1, 'API key required'),
-  healthData: z.object({
-    dateRange: z.object({
-      start: z.string(),
-      end: z.string(),
-    }),
-    sleep: z.array(z.any()),
-    stress: z.array(z.any()),
-    bodyBattery: z.array(z.any()),
-    activities: z.array(z.any()),
-    heartRate: z.array(z.any()),
-  }),
-  model: z.string().optional(),
+  userId: z.string().min(1, 'userId required'),
+  reportId: z.string().min(1, 'reportId required'),
+  healthData: HealthDataSchema,
+  useAdvancedModel: z.boolean().optional(),
   messages: z.array(ChatMessageSchema).min(1, 'At least one message required'),
 });
 
 export const DailyInsightRequestSchema = z.object({
-  provider: z.enum(['openai', 'anthropic', 'google']),
-  apiKey: z.string().min(1, 'API key required'),
-  healthData: z.object({
-    dateRange: z.object({
-      start: z.string(),
-      end: z.string(),
-    }),
-    sleep: z.array(z.any()),
-    stress: z.array(z.any()),
-    bodyBattery: z.array(z.any()),
-    activities: z.array(z.any()),
-    heartRate: z.array(z.any()),
-  }),
-  model: z.string().optional(),
+  userId: z.string().min(1, 'userId required'),
+  healthData: HealthDataSchema,
 });
 
 // ============================================================================

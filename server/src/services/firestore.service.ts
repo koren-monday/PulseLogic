@@ -4,14 +4,15 @@ import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
 // Types for user data
+export interface UserProfile {
+  email: string;
+  displayName?: string;
+  createdAt: string;
+  lastLoginAt: string;
+}
+
 export interface UserSettings {
-  provider: 'openai' | 'anthropic' | 'google';
-  model: string;
-  apiKeys: {
-    openai?: string;
-    anthropic?: string;
-    google?: string;
-  };
+  preferAdvancedModel?: boolean;
 }
 
 export interface LifeContext {
@@ -21,6 +22,7 @@ export interface LifeContext {
 }
 
 export interface UserData {
+  profile?: UserProfile;
   settings?: UserSettings;
   lifeContexts?: LifeContext[];
   updatedAt?: string;
@@ -67,6 +69,64 @@ export async function getUserData(userId: string): Promise<UserData | null> {
     return doc.data() as UserData;
   } catch (error) {
     console.error('Failed to get user data:', error);
+    return null;
+  }
+}
+
+/**
+ * Record user login - stores email for easy identification in Firebase console.
+ * Creates profile if first login, updates lastLoginAt if existing.
+ */
+export async function recordUserLogin(userId: string, email: string): Promise<boolean> {
+  const firestore = getDb();
+  if (!firestore) return false;
+
+  try {
+    const now = new Date().toISOString();
+    const userRef = firestore.collection('users').doc(userId);
+    const doc = await userRef.get();
+
+    if (!doc.exists || !doc.data()?.profile) {
+      // First login - create profile
+      await userRef.set(
+        {
+          profile: {
+            email,
+            createdAt: now,
+            lastLoginAt: now,
+          },
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    } else {
+      // Existing user - update last login
+      await userRef.update({
+        'profile.lastLoginAt': now,
+        'profile.email': email, // Update in case email changed
+        updatedAt: now,
+      });
+    }
+    return true;
+  } catch (error) {
+    console.error('Failed to record user login:', error);
+    return false;
+  }
+}
+
+/**
+ * Get user profile (email, etc) for admin visibility.
+ */
+export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+  const firestore = getDb();
+  if (!firestore) return null;
+
+  try {
+    const doc = await firestore.collection('users').doc(userId).get();
+    if (!doc.exists) return null;
+    return doc.data()?.profile || null;
+  } catch (error) {
+    console.error('Failed to get user profile:', error);
     return null;
   }
 }
@@ -481,5 +541,240 @@ export async function getStatisticsHistory(userId: string, limit = 10): Promise<
   } catch (error) {
     console.error('Failed to get statistics history:', error);
     return [];
+  }
+}
+
+// ============================================================================
+// Subscription & Usage Tracking
+// ============================================================================
+
+import type { UserSubscription, UsageRecord } from '../types/subscription.js';
+
+const DEFAULT_SUBSCRIPTION: UserSubscription = {
+  tier: 'free',
+  status: 'active',
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+};
+
+export async function getUserSubscription(userId: string): Promise<UserSubscription> {
+  const firestore = getDb();
+  if (!firestore) return { ...DEFAULT_SUBSCRIPTION };
+
+  try {
+    const doc = await firestore.collection('users').doc(userId).get();
+    if (!doc.exists) return { ...DEFAULT_SUBSCRIPTION };
+
+    const data = doc.data();
+    if (!data?.subscription) return { ...DEFAULT_SUBSCRIPTION };
+
+    return data.subscription as UserSubscription;
+  } catch (error) {
+    console.error('Failed to get user subscription:', error);
+    return { ...DEFAULT_SUBSCRIPTION };
+  }
+}
+
+export async function updateUserSubscription(
+  userId: string,
+  updates: Partial<UserSubscription>
+): Promise<boolean> {
+  const firestore = getDb();
+  if (!firestore) return false;
+
+  try {
+    const current = await getUserSubscription(userId);
+    const updated: UserSubscription = {
+      ...current,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await firestore.collection('users').doc(userId).set(
+      { subscription: updated },
+      { merge: true }
+    );
+    return true;
+  } catch (error) {
+    console.error('Failed to update user subscription:', error);
+    return false;
+  }
+}
+
+export async function setUserSubscription(
+  userId: string,
+  subscription: UserSubscription
+): Promise<boolean> {
+  const firestore = getDb();
+  if (!firestore) return false;
+
+  try {
+    await firestore.collection('users').doc(userId).set(
+      {
+        subscription: {
+          ...subscription,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+      { merge: true }
+    );
+    return true;
+  } catch (error) {
+    console.error('Failed to set user subscription:', error);
+    return false;
+  }
+}
+
+// Get today's date as YYYY-MM-DD
+function getToday(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+// Get the start of the current week (Monday) as YYYY-MM-DD
+function getWeekStart(): string {
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Adjust so Monday = 0
+  const weekStart = new Date(now.getTime() - diff * 24 * 60 * 60 * 1000);
+  return weekStart.toISOString().split('T')[0];
+}
+
+export async function getUserUsage(userId: string): Promise<UsageRecord> {
+  const firestore = getDb();
+  const today = getToday();
+  const weekStart = getWeekStart();
+
+  const defaultUsage: UsageRecord = {
+    userId,
+    date: today,
+    llmCommunicationsToday: 0,
+    snapshotsUsed: 0,
+    weekStartDate: weekStart,
+    reportsThisWeek: 0,
+  };
+
+  if (!firestore) return defaultUsage;
+
+  try {
+    const doc = await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('usage')
+      .doc(today)
+      .get();
+
+    if (!doc.exists) return defaultUsage;
+
+    const data = doc.data() as UsageRecord;
+
+    // Reset weekly count if we're in a new week
+    if (data.weekStartDate !== weekStart) {
+      return {
+        ...data,
+        llmCommunicationsToday: data.llmCommunicationsToday || 0,
+        weekStartDate: weekStart,
+        reportsThisWeek: 0,
+      };
+    }
+
+    return {
+      ...defaultUsage,
+      ...data,
+    };
+  } catch (error) {
+    console.error('Failed to get user usage:', error);
+    return defaultUsage;
+  }
+}
+
+export async function incrementUsage(
+  userId: string,
+  type: 'llm' | 'snapshot'
+): Promise<boolean> {
+  const firestore = getDb();
+  if (!firestore) return false;
+
+  const today = getToday();
+  const weekStart = getWeekStart();
+
+  try {
+    const usage = await getUserUsage(userId);
+    const updates: Partial<UsageRecord> = {
+      date: today,
+      weekStartDate: weekStart,
+    };
+
+    switch (type) {
+      case 'llm':
+        // Increment both daily LLM communications and weekly reports
+        updates.llmCommunicationsToday = (usage.llmCommunicationsToday || 0) + 1;
+        updates.reportsThisWeek = (usage.reportsThisWeek || 0) + 1;
+        break;
+      case 'snapshot':
+        updates.snapshotsUsed = (usage.snapshotsUsed || 0) + 1;
+        break;
+    }
+
+    await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('usage')
+      .doc(today)
+      .set({ ...usage, ...updates }, { merge: true });
+
+    return true;
+  } catch (error) {
+    console.error('Failed to increment usage:', error);
+    return false;
+  }
+}
+
+// Get chat messages sent for a specific report (tracked in report metadata)
+export async function getReportChatCount(
+  userId: string,
+  reportId: string
+): Promise<number> {
+  const firestore = getDb();
+  if (!firestore) return 0;
+
+  try {
+    const doc = await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('reports')
+      .doc(reportId)
+      .get();
+
+    if (!doc.exists) return 0;
+    const data = doc.data();
+    return data?.chatMessageCount || 0;
+  } catch (error) {
+    console.error('Failed to get report chat count:', error);
+    return 0;
+  }
+}
+
+export async function incrementReportChatCount(
+  userId: string,
+  reportId: string
+): Promise<boolean> {
+  const firestore = getDb();
+  if (!firestore) return false;
+
+  try {
+    const current = await getReportChatCount(userId, reportId);
+    await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('reports')
+      .doc(reportId)
+      .update({
+        chatMessageCount: current + 1,
+        updatedAt: new Date().toISOString(),
+      });
+    return true;
+  } catch (error) {
+    console.error('Failed to increment report chat count:', error);
+    return false;
   }
 }

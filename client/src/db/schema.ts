@@ -1,6 +1,5 @@
 import Dexie, { type Table } from 'dexie';
 import type {
-  LLMProvider,
   GarminHealthData,
   LifeContext,
   StructuredAnalysis,
@@ -20,7 +19,6 @@ export interface SavedReport {
   id: string;
   createdAt: string;
   dateRange: { start: string; end: string };
-  provider: LLMProvider;
   model: string;
   markdown: string;
   structured: StructuredAnalysis;

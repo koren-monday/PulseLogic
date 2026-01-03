@@ -2,30 +2,36 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { z } from 'zod';
 import { GarminService, type LoginResult } from '../services/garmin.service.js';
 import { tokensExist } from '../services/token-storage.js';
+import { recordUserLogin } from '../services/firestore.service.js';
 import { validate, AppError } from '../middleware/index.js';
 import { GarminLoginSchema, FetchDataRequestSchema, type ApiResponse, type GarminHealthData } from '../types/index.js';
+import { getMaxDataDays } from '../services/usage.service.js';
 
 const router = Router();
 
 // Store Garmin service instances per session (in-memory for simplicity)
-const sessions = new Map<string, GarminService>();
+interface SessionData {
+  service: GarminService;
+  email?: string; // Store email for recording login after MFA
+}
+const sessions = new Map<string, SessionData>();
 
 function generateSessionId(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 }
 
-function getSession(req: Request): { id: string; service: GarminService } {
+function getSession(req: Request): { id: string; data: SessionData } {
   let sessionId = req.headers['x-garmin-session'] as string;
 
   if (sessionId && sessions.has(sessionId)) {
-    return { id: sessionId, service: sessions.get(sessionId)! };
+    return { id: sessionId, data: sessions.get(sessionId)! };
   }
 
   sessionId = generateSessionId();
-  const service = new GarminService();
-  sessions.set(sessionId, service);
+  const data: SessionData = { service: new GarminService() };
+  sessions.set(sessionId, data);
 
-  return { id: sessionId, service };
+  return { id: sessionId, data };
 }
 
 // Response type for login that includes MFA info
@@ -48,11 +54,21 @@ router.post(
   async (req: Request, res: Response<ApiResponse<LoginResponse>>, next: NextFunction) => {
     try {
       const { username, password } = req.body;
-      const { id, service } = getSession(req);
+      const { id, data } = getSession(req);
 
-      const result: LoginResult = await service.login({ username, password });
+      // Store email for later use (after MFA if needed)
+      data.email = username;
+
+      const result: LoginResult = await data.service.login({ username, password });
 
       if (result.success && result.session) {
+        // Record login in Firestore (stores email for easy identification)
+        if (result.session.userId) {
+          recordUserLogin(result.session.userId, username).catch(err => {
+            console.error('Failed to record login:', err);
+          });
+        }
+
         res.json({
           success: true,
           data: {
@@ -98,11 +114,18 @@ router.post(
   async (req: Request, res: Response<ApiResponse<LoginResponse>>, next: NextFunction) => {
     try {
       const { mfaSessionId, code } = req.body;
-      const { id, service } = getSession(req);
+      const { id, data } = getSession(req);
 
-      const result = await service.submitMFACode(mfaSessionId, code);
+      const result = await data.service.submitMFACode(mfaSessionId, code);
 
       if (result.success && result.session) {
+        // Record login in Firestore (stores email for easy identification)
+        if (result.session.userId && data.email) {
+          recordUserLogin(result.session.userId, data.email).catch(err => {
+            console.error('Failed to record login:', err);
+          });
+        }
+
         res.json({
           success: true,
           data: {
@@ -136,11 +159,19 @@ router.post(
   async (req: Request, res: Response<ApiResponse<LoginResponse>>, next: NextFunction) => {
     try {
       const { email } = req.body;
-      const { id, service } = getSession(req);
+      const { id, data } = getSession(req);
 
-      const result = await service.restoreSession(email);
+      data.email = email;
+      const result = await data.service.restoreSession(email);
 
       if (result.success && result.session) {
+        // Record login in Firestore (stores email for easy identification)
+        if (result.session.userId) {
+          recordUserLogin(result.session.userId, email).catch(err => {
+            console.error('Failed to record login:', err);
+          });
+        }
+
         res.json({
           success: true,
           data: {
@@ -200,8 +231,8 @@ router.post('/logout', (req: Request, res: Response<ApiResponse>, next: NextFunc
     const clearStoredTokens = req.body?.clearStoredTokens ?? false;
 
     if (sessionId && sessions.has(sessionId)) {
-      const service = sessions.get(sessionId)!;
-      service.logout(clearStoredTokens);
+      const sessionData = sessions.get(sessionId)!;
+      sessionData.service.logout(clearStoredTokens);
       sessions.delete(sessionId);
     }
 
@@ -218,7 +249,7 @@ router.post('/logout', (req: Request, res: Response<ApiResponse>, next: NextFunc
 router.get('/status', (req: Request, res: Response<ApiResponse<{ authenticated: boolean }>>, next: NextFunction) => {
   try {
     const sessionId = req.headers['x-garmin-session'] as string;
-    const authenticated = sessionId ? sessions.get(sessionId)?.isAuthenticated() ?? false : false;
+    const authenticated = sessionId ? sessions.get(sessionId)?.service.isAuthenticated() ?? false : false;
 
     res.json({
       success: true,
@@ -232,11 +263,12 @@ router.get('/status', (req: Request, res: Response<ApiResponse<{ authenticated: 
 /**
  * POST /api/garmin/data
  * Fetch health data for the specified number of days
+ * Enforces tier-based data range limits
  */
 router.post(
   '/data',
   validate(FetchDataRequestSchema),
-  async (req: Request, res: Response<ApiResponse<GarminHealthData>>, next: NextFunction) => {
+  async (req: Request, res: Response<ApiResponse<GarminHealthData & { cappedDays?: number }>>, next: NextFunction) => {
     try {
       const sessionId = req.headers['x-garmin-session'] as string;
 
@@ -244,17 +276,32 @@ router.post(
         throw new AppError(401, 'Not authenticated. Please login first.');
       }
 
-      const service = sessions.get(sessionId)!;
-      if (!service.isAuthenticated()) {
+      const sessionData = sessions.get(sessionId)!;
+      if (!sessionData.service.isAuthenticated()) {
         throw new AppError(401, 'Session expired. Please login again.');
       }
 
-      const { days } = req.body;
-      const healthData = await service.fetchHealthData(days);
+      let { days } = req.body;
+      const { userId } = req.body;
+
+      // Enforce tier-based data range limit
+      let cappedDays: number | undefined;
+      if (userId) {
+        const maxDays = await getMaxDataDays(userId);
+        if (days > maxDays) {
+          cappedDays = maxDays;
+          days = maxDays;
+        }
+      }
+
+      const healthData = await sessionData.service.fetchHealthData(days);
 
       res.json({
         success: true,
-        data: healthData,
+        data: {
+          ...healthData,
+          ...(cappedDays !== undefined && { cappedDays }),
+        },
       });
     } catch (error) {
       next(error);

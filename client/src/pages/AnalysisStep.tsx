@@ -1,99 +1,99 @@
 import { useState, useEffect, useRef } from 'react';
-import { Brain, Sparkles, RefreshCw, ChevronLeft, Copy, Check, Cpu, Send, MessageCircle, User, Bot, CheckCircle } from 'lucide-react';
-import { useAnalysis, useChat, useModelRegistry, useSaveReport } from '../hooks';
+import { Brain, Sparkles, RefreshCw, ChevronLeft, Copy, Check, Settings, Send, MessageCircle, User, Bot, CheckCircle, Lock, Zap } from 'lucide-react';
+import { useAnalysis, useChat, useSaveReport } from '../hooks';
 import { Alert } from '../components/Alert';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { LifeContextSelector } from '../components/LifeContextSelector';
-import { getCurrentUserId, getLifeContexts, storeLifeContexts, type UserSettings } from '../utils/storage';
+import { useSubscription } from '../contexts/SubscriptionContext';
+import { getLifeContexts, storeLifeContexts } from '../utils/storage';
 import { pushLifeContextsToCloud } from '../services/sync.service';
-import type { GarminHealthData, LLMProvider, AnalysisResponse, ChatMessage, LifeContext } from '../types';
+import { canUseAdvancedModel, GEMINI_MODELS } from '../types/subscription';
+import type { GarminHealthData, AnalysisResponse, ChatMessage, LifeContext } from '../types';
 
 interface AnalysisStepProps {
   healthData: GarminHealthData;
-  selectedProvider: LLMProvider;
-  selectedModel: string;
-  userSettings: UserSettings;
+  userId: string;
+  preferAdvancedModel?: boolean;
   onBack: () => void;
   onReset: () => void;
+  onOpenSettings: () => void;
 }
 
 export function AnalysisStep({
   healthData,
-  selectedProvider,
-  selectedModel,
-  userSettings,
+  userId,
+  preferAdvancedModel = false,
   onBack,
   onReset,
+  onOpenSettings,
 }: AnalysisStepProps) {
-  const [activeProvider, setActiveProvider] = useState<LLMProvider>(selectedProvider);
-  const [activeModel, setActiveModel] = useState<string>(selectedModel);
+  const {
+    reportsRemaining,
+    canChat,
+    checkReportAllowed,
+    checkChatAllowed,
+    tier,
+    refreshTier,
+  } = useSubscription();
+
+  const [useAdvancedModel, setUseAdvancedModel] = useState(preferAdvancedModel);
   const [customPrompt, setCustomPrompt] = useState('');
   const [lifeContexts, setLifeContexts] = useState<LifeContext[]>(() => {
-    // Load saved life contexts on mount
-    const userId = getCurrentUserId();
-    return userId ? getLifeContexts(userId) : [];
+    return getLifeContexts(userId);
   });
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [copied, setCopied] = useState(false);
   const [savedReportId, setSavedReportId] = useState<string | null>(null);
+  const [limitError, setLimitError] = useState<string | null>(null);
+  const [chatLimitError, setChatLimitError] = useState<string | null>(null);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: modelRegistry, isLoading: modelsLoading } = useModelRegistry();
   const analysisMutation = useAnalysis();
   const chatMutation = useChat();
   const saveReportMutation = useSaveReport();
 
-  // Update active model when provider changes
-  useEffect(() => {
-    if (modelRegistry && activeProvider) {
-      const config = modelRegistry[activeProvider];
-      // Keep current model if it's valid for this provider, otherwise use default
-      const isValidModel = config.models.some(m => m.id === activeModel);
-      if (!isValidModel) {
-        setActiveModel(config.defaultModel);
-      }
-    }
-  }, [activeProvider, modelRegistry, activeModel]);
+  // Check if user can use advanced model
+  const advancedModelAvailable = canUseAdvancedModel(tier);
+  const activeModel = useAdvancedModel && advancedModelAvailable ? GEMINI_MODELS.PRO : GEMINI_MODELS.FLASH;
 
   // Persist life contexts when they change
   useEffect(() => {
-    const userId = getCurrentUserId();
-    if (userId) {
-      storeLifeContexts(userId, lifeContexts);
-      // Sync to cloud in background
-      pushLifeContextsToCloud(userId, lifeContexts);
-    }
-  }, [lifeContexts]);
+    storeLifeContexts(userId, lifeContexts);
+    // Sync to cloud in background
+    pushLifeContextsToCloud(userId, lifeContexts);
+  }, [userId, lifeContexts]);
 
   const handleAnalyze = async () => {
-    const apiKey = userSettings.apiKeys[activeProvider];
-    if (!apiKey) {
-      alert(`No API key found for ${modelRegistry?.[activeProvider]?.name || activeProvider}. Please configure it in Settings.`);
+    setLimitError(null);
+
+    // Check report limit first
+    const limitCheck = await checkReportAllowed();
+    if (!limitCheck.allowed) {
+      setLimitError(limitCheck.reason || 'Report limit reached');
       return;
     }
 
     try {
       const result = await analysisMutation.mutateAsync({
-        provider: activeProvider,
-        apiKey,
+        userId,
         healthData,
-        model: activeModel,
+        useAdvancedModel: useAdvancedModel && advancedModelAvailable,
         customPrompt: customPrompt || undefined,
         lifeContexts: lifeContexts.length > 0 ? lifeContexts : undefined,
       });
       setAnalysis(result);
       setSavedReportId(null); // Reset saved status for new analysis
+      refreshTier(); // Refresh tier info to update remaining counts
 
       // Auto-save if we have structured data
       if (result.structured) {
         const reportId = await saveReportMutation.mutateAsync({
           dateRange: healthData.dateRange,
-          provider: activeProvider,
-          model: activeModel,
+          model: result.model,
           markdown: result.analysis,
           structured: result.structured,
           healthData,
@@ -127,11 +127,13 @@ export function AnalysisStep({
   }, [analysis, chatMessages.length]);
 
   const handleSendChat = async () => {
-    if (!chatInput.trim() || chatMutation.isPending) return;
+    if (!chatInput.trim() || chatMutation.isPending || !savedReportId) return;
+    setChatLimitError(null);
 
-    const apiKey = userSettings.apiKeys[activeProvider];
-    if (!apiKey) {
-      alert(`No API key found for ${modelRegistry?.[activeProvider]?.name || activeProvider}. Please configure it in Settings.`);
+    // Check chat limit
+    const chatCheck = await checkChatAllowed(savedReportId);
+    if (!chatCheck.allowed) {
+      setChatLimitError(chatCheck.reason || 'Chat limit reached for this report');
       return;
     }
 
@@ -142,13 +144,14 @@ export function AnalysisStep({
 
     try {
       const result = await chatMutation.mutateAsync({
-        provider: activeProvider,
-        apiKey,
+        userId,
+        reportId: savedReportId,
         healthData,
-        model: activeModel,
+        useAdvancedModel: useAdvancedModel && advancedModelAvailable,
         messages: newMessages,
       });
       setChatMessages([...newMessages, { role: 'assistant', content: result.message }]);
+      refreshTier(); // Refresh to update chat remaining count
     } catch {
       // Error is handled by mutation, remove the user message if failed
       setChatMessages(chatMessages);
@@ -165,65 +168,48 @@ export function AnalysisStep({
         </div>
 
         <p className="text-slate-400 text-sm mb-4">
-          Select an LLM provider and model to generate personalized insights from your health data.
+          Generate personalized insights from your health data using AI.
         </p>
 
-        {/* Provider Selection */}
-        <div className="flex gap-2 mb-4">
-          {(['openai', 'anthropic', 'google'] as LLMProvider[]).map(provider => {
-            const hasKey = !!userSettings.apiKeys[provider];
-            const providerName = modelRegistry?.[provider]?.name || provider;
-            return (
-              <button
-                key={provider}
-                className={`
-                  px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                  ${activeProvider === provider
-                    ? 'bg-garmin-blue text-white'
-                    : hasKey
-                    ? 'bg-slate-700 text-white hover:bg-slate-600'
-                    : 'bg-slate-800 text-slate-500 cursor-not-allowed'}
-                `}
-                onClick={() => hasKey && setActiveProvider(provider)}
-                disabled={!hasKey}
-              >
-                {providerName}
-                {!hasKey && ' (no key)'}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Model Selection */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">Model</label>
-          {modelsLoading ? (
-            <LoadingSpinner size="sm" message="Loading models..." />
-          ) : modelRegistry ? (
-            <div className="flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-slate-400" />
-              <select
-                className="input-field flex-1"
-                value={activeModel}
-                onChange={e => setActiveModel(e.target.value)}
-              >
-                {modelRegistry[activeProvider].models.map(model => (
-                  <option key={model.id} value={model.id}>
-                    {model.name} - {model.description}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <Alert type="error" message="Failed to load models" />
-          )}
-        </div>
+        {/* Model Selection - Only for paid tier */}
+        {advancedModelAvailable && (
+          <div className="mb-4 p-3 bg-slate-700/50 rounded-lg">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useAdvancedModel}
+                onChange={e => setUseAdvancedModel(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-garmin-blue focus:ring-garmin-blue focus:ring-offset-slate-800"
+              />
+              <div>
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-400" />
+                  <span className="font-medium text-white">Use Advanced Model</span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Gemini Pro for more detailed, nuanced analysis
+                </p>
+              </div>
+            </label>
+            <p className="text-xs text-slate-500 mt-2">
+              Using: <span className="text-slate-300">{activeModel}</span>
+            </p>
+          </div>
+        )}
 
         {/* Life Context */}
         <LifeContextSelector
           contexts={lifeContexts}
           onChange={setLifeContexts}
         />
+        <button
+          type="button"
+          className="text-xs text-garmin-blue hover:underline mb-2 flex items-center gap-1"
+          onClick={onOpenSettings}
+        >
+          <Settings className="w-3 h-3" />
+          Manage life contexts in Settings
+        </button>
 
         {/* Custom Prompt */}
         <div className="mb-4">
@@ -245,13 +231,33 @@ export function AnalysisStep({
           />
         )}
 
+        {limitError && (
+          <Alert type="warning" message={limitError} />
+        )}
+
+        {/* Reports remaining indicator */}
+        <p className="text-xs text-slate-400 mb-2">
+          {reportsRemaining > 0 ? (
+            <>Reports remaining: <span className="text-white font-medium">{reportsRemaining}</span></>
+          ) : (
+            <span className="text-yellow-400">
+              {tier === 'free' ? 'Weekly limit reached. Upgrade to Pro for more reports.' : 'Daily limit reached. Try again tomorrow.'}
+            </span>
+          )}
+        </p>
+
         <button
           className="btn-primary w-full flex items-center justify-center gap-2"
           onClick={handleAnalyze}
-          disabled={analysisMutation.isPending}
+          disabled={analysisMutation.isPending || reportsRemaining === 0}
         >
           {analysisMutation.isPending ? (
             <LoadingSpinner size="sm" message="Analyzing with AI..." />
+          ) : reportsRemaining === 0 ? (
+            <>
+              <Lock className="w-4 h-4" />
+              Limit Reached
+            </>
           ) : (
             <>
               <Sparkles className="w-4 h-4" />
@@ -351,24 +357,38 @@ export function AnalysisStep({
           </div>
 
           {/* Chat Input */}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              className="input-field flex-1"
-              placeholder="Ask a follow-up question about your health data..."
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSendChat()}
-              disabled={chatMutation.isPending}
-            />
-            <button
-              className="btn-primary px-4 flex items-center gap-2"
-              onClick={handleSendChat}
-              disabled={!chatInput.trim() || chatMutation.isPending}
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </div>
+          {canChat ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="input-field flex-1"
+                  placeholder="Ask a follow-up question about your health data..."
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSendChat()}
+                  disabled={chatMutation.isPending}
+                />
+                <button
+                  className="btn-primary px-4 flex items-center gap-2"
+                  onClick={handleSendChat}
+                  disabled={!chatInput.trim() || chatMutation.isPending}
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+              {chatLimitError && (
+                <Alert type="warning" message={chatLimitError} />
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 p-3 bg-slate-700/50 rounded-lg text-sm text-slate-400">
+              <Lock className="w-4 h-4" />
+              <span>
+                Follow-up questions are available on Pro. Upgrade to chat with your reports.
+              </span>
+            </div>
+          )}
 
           {chatMutation.isError && (
             <Alert

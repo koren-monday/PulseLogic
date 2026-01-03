@@ -3,13 +3,11 @@ import { Zap, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, Lightbulb
 import { useDailyInsightGeneration } from '../hooks';
 import { LoadingSpinner } from './LoadingSpinner';
 import { Alert } from './Alert';
-import type { GarminHealthData, LLMProvider, DailyInsightData, DailyInsightComparison } from '../types';
+import type { GarminHealthData, DailyInsightData, DailyInsightComparison } from '../types';
 
 interface QuickDailyInsightProps {
   healthData: GarminHealthData;
-  provider: LLMProvider;
-  apiKey: string;
-  model?: string;
+  userId: string;
 }
 
 function TrendIcon({ trend }: { trend: DailyInsightComparison['trend'] }) {
@@ -34,7 +32,7 @@ function MetricLabel({ metric }: { metric: DailyInsightComparison['metric'] }) {
   return <span>{labels[metric]}</span>;
 }
 
-export function QuickDailyInsight({ healthData, provider, apiKey, model }: QuickDailyInsightProps) {
+export function QuickDailyInsight({ healthData, userId }: QuickDailyInsightProps) {
   const [expanded, setExpanded] = useState(false);
   const [insight, setInsight] = useState<DailyInsightData | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
@@ -44,10 +42,8 @@ export function QuickDailyInsight({ healthData, provider, apiKey, model }: Quick
   const handleGenerate = async () => {
     try {
       const result = await dailyInsightMutation.mutateAsync({
-        provider,
-        apiKey,
+        userId,
         healthData,
-        model,
       });
       setInsight(result.insight);
       setHasGenerated(true);

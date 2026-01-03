@@ -1,58 +1,11 @@
 /**
- * Simple encryption utilities for storing API keys in localStorage.
+ * Storage utilities for PulseLogic client.
  *
- * Note: This is NOT cryptographically secure - it's obfuscation to prevent
- * casual inspection. For production, use a proper key vault or session-based storage.
+ * Note: With the simplified tier system, API keys are now managed server-side.
+ * This file handles session storage, user preferences, and life contexts.
  */
 
 const STORAGE_KEY_PREFIX = 'gie_';
-const OBFUSCATION_KEY = 'garmin-insights-engine-2024';
-
-/**
- * Simple XOR-based obfuscation (NOT encryption!)
- */
-function obfuscate(text: string): string {
-  const encoded = text
-    .split('')
-    .map((char, i) => {
-      const keyChar = OBFUSCATION_KEY.charCodeAt(i % OBFUSCATION_KEY.length);
-      return String.fromCharCode(char.charCodeAt(0) ^ keyChar);
-    })
-    .join('');
-  return btoa(encoded);
-}
-
-function deobfuscate(text: string): string {
-  const decoded = atob(text);
-  return decoded
-    .split('')
-    .map((char, i) => {
-      const keyChar = OBFUSCATION_KEY.charCodeAt(i % OBFUSCATION_KEY.length);
-      return String.fromCharCode(char.charCodeAt(0) ^ keyChar);
-    })
-    .join('');
-}
-
-export function storeApiKey(provider: string, apiKey: string): void {
-  const key = `${STORAGE_KEY_PREFIX}${provider}`;
-  localStorage.setItem(key, obfuscate(apiKey));
-}
-
-export function getApiKey(provider: string): string | null {
-  const key = `${STORAGE_KEY_PREFIX}${provider}`;
-  const stored = localStorage.getItem(key);
-  if (!stored) return null;
-  try {
-    return deobfuscate(stored);
-  } catch {
-    return null;
-  }
-}
-
-export function removeApiKey(provider: string): void {
-  const key = `${STORAGE_KEY_PREFIX}${provider}`;
-  localStorage.removeItem(key);
-}
 
 export function storeSessionId(sessionId: string): void {
   // Use localStorage for persistent sessions across browser restarts
@@ -86,22 +39,16 @@ export function clearGarminAuth(): void {
 
 // ============================================================================
 // User Settings Storage (persisted per Garmin user)
+// Note: With simplified tiers, LLM API keys are server-managed.
+// User settings now only include model preferences.
 // ============================================================================
 
 export interface UserSettings {
-  selectedProvider: 'openai' | 'anthropic' | 'google';
-  selectedModel: string;
-  apiKeys: {
-    openai?: string;
-    anthropic?: string;
-    google?: string;
-  };
+  preferAdvancedModel?: boolean; // User prefers Gemini Pro when available (paid tier)
 }
 
 const DEFAULT_SETTINGS: UserSettings = {
-  selectedProvider: 'openai',
-  selectedModel: 'gpt-5.2',
-  apiKeys: {},
+  preferAdvancedModel: false,
 };
 
 function getUserSettingsKey(userId: string): string {
@@ -110,16 +57,7 @@ function getUserSettingsKey(userId: string): string {
 
 export function storeUserSettings(userId: string, settings: UserSettings): void {
   const key = getUserSettingsKey(userId);
-  // Obfuscate API keys before storing
-  const toStore = {
-    ...settings,
-    apiKeys: {
-      openai: settings.apiKeys.openai ? obfuscate(settings.apiKeys.openai) : undefined,
-      anthropic: settings.apiKeys.anthropic ? obfuscate(settings.apiKeys.anthropic) : undefined,
-      google: settings.apiKeys.google ? obfuscate(settings.apiKeys.google) : undefined,
-    },
-  };
-  localStorage.setItem(key, JSON.stringify(toStore));
+  localStorage.setItem(key, JSON.stringify(settings));
 }
 
 export function getUserSettings(userId: string): UserSettings {
@@ -129,15 +67,8 @@ export function getUserSettings(userId: string): UserSettings {
 
   try {
     const parsed = JSON.parse(stored);
-    // Deobfuscate API keys
     return {
-      selectedProvider: parsed.selectedProvider || DEFAULT_SETTINGS.selectedProvider,
-      selectedModel: parsed.selectedModel || DEFAULT_SETTINGS.selectedModel,
-      apiKeys: {
-        openai: parsed.apiKeys?.openai ? deobfuscate(parsed.apiKeys.openai) : undefined,
-        anthropic: parsed.apiKeys?.anthropic ? deobfuscate(parsed.apiKeys.anthropic) : undefined,
-        google: parsed.apiKeys?.google ? deobfuscate(parsed.apiKeys.google) : undefined,
-      },
+      preferAdvancedModel: parsed.preferAdvancedModel ?? DEFAULT_SETTINGS.preferAdvancedModel,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

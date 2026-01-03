@@ -3,6 +3,9 @@ import type { StructuredAnalysis } from './structured-analysis';
 export * from './structured-analysis';
 export type { StructuredAnalysis };
 
+// Re-export subscription types
+export * from './subscription';
+
 // ============================================================================
 // Garmin Types (mirrored from server)
 // ============================================================================
@@ -82,30 +85,11 @@ export interface GarminHealthData {
 }
 
 // ============================================================================
-// LLM Types
+// LLM Types (Simplified - server provides all API keys)
 // ============================================================================
 
-export type LLMProvider = 'openai' | 'anthropic' | 'google';
-
-export interface ModelInfo {
-  id: string;
-  name: string;
-  description: string;
-}
-
-export interface ProviderConfig {
-  name: string;
-  models: ModelInfo[];
-  defaultModel: string;
-}
-
-export type ModelRegistry = Record<LLMProvider, ProviderConfig>;
-
-export interface LLMConfig {
-  provider: LLMProvider;
-  apiKey: string;
-  model?: string;
-}
+// Legacy type kept for compatibility during transition
+export type LLMProvider = 'google';
 
 // ============================================================================
 // Life Context Types - Personal circumstances affecting health metrics
@@ -219,16 +203,14 @@ export const LIFE_CONTEXT_LABELS: Record<LifeContextType, { label: string; icon:
 };
 
 export interface AnalysisRequest {
-  provider: LLMProvider;
-  apiKey: string;
+  userId: string;
   healthData: GarminHealthData;
-  model?: string;
+  useAdvancedModel?: boolean; // If true and paid tier, use Gemini Pro
   customPrompt?: string;
   lifeContexts?: LifeContext[];
 }
 
 export interface AnalysisResponse {
-  provider: LLMProvider;
   model: string;
   analysis: string;
   structured?: StructuredAnalysis;
@@ -242,15 +224,14 @@ export interface ChatMessage {
 }
 
 export interface ChatRequest {
-  provider: LLMProvider;
-  apiKey: string;
+  userId: string;
+  reportId: string;
   healthData: GarminHealthData;
-  model?: string;
+  useAdvancedModel?: boolean;
   messages: ChatMessage[];
 }
 
 export interface ChatResponse {
-  provider: LLMProvider;
   model: string;
   message: string;
   tokensUsed?: number;
@@ -277,8 +258,12 @@ export interface DailyInsightData {
   moodEmoji: string;
 }
 
+export interface DailyInsightRequest {
+  userId: string;
+  healthData: GarminHealthData;
+}
+
 export interface DailyInsightResponse {
-  provider: LLMProvider;
   model: string;
   insight: DailyInsightData | null;
   tokensUsed?: number;
@@ -303,9 +288,6 @@ export type WizardStep = 'config' | 'data' | 'analysis';
 
 export interface AppConfig {
   garminCredentials: GarminCredentials | null;
-  llmConfigs: Partial<Record<LLMProvider, string>>;
-  selectedProvider: LLMProvider;
-  selectedModels: Partial<Record<LLMProvider, string>>;
 }
 
 // ============================================================================

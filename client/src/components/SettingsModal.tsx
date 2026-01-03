@@ -1,85 +1,54 @@
 import { useState, useEffect } from 'react';
-import { Settings, X, Eye, EyeOff, CheckCircle, Cpu, Save } from 'lucide-react';
-import { useModelRegistry } from '../hooks';
+import { Settings, X, Save, Zap, Heart } from 'lucide-react';
 import { Alert } from './Alert';
-import { LoadingSpinner } from './LoadingSpinner';
+import { LifeContextSelector } from './LifeContextSelector';
+import { useSubscription } from '../contexts/SubscriptionContext';
+import { getLifeContexts, storeLifeContexts } from '../utils/storage';
+import { pushLifeContextsToCloud } from '../services/sync.service';
+import { canUseAdvancedModel, GEMINI_MODELS } from '../types/subscription';
 import type { UserSettings } from '../utils/storage';
-import type { LLMProvider } from '../types';
+import type { LifeContext } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  userId: string;
   settings: UserSettings;
   onSave: (settings: UserSettings) => void;
 }
 
-export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, userId, settings, onSave }: SettingsModalProps) {
+  const { tier } = useSubscription();
   const [localSettings, setLocalSettings] = useState<UserSettings>(settings);
-  const [showApiKeys, setShowApiKeys] = useState<Record<LLMProvider, boolean>>({
-    openai: false,
-    anthropic: false,
-    google: false,
-  });
+  const [lifeContexts, setLifeContexts] = useState<LifeContext[]>([]);
   const [saved, setSaved] = useState(false);
 
-  const { data: modelRegistry, isLoading: modelsLoading } = useModelRegistry();
+  const advancedModelAvailable = canUseAdvancedModel(tier);
 
-  // Reset local settings when modal opens
+  // Load life contexts and reset state when modal opens
   useEffect(() => {
     if (isOpen) {
       setLocalSettings(settings);
+      setLifeContexts(getLifeContexts(userId));
       setSaved(false);
     }
-  }, [isOpen, settings]);
+  }, [isOpen, settings, userId]);
 
-  // Update selected model when provider changes
-  useEffect(() => {
-    if (modelRegistry && localSettings.selectedProvider) {
-      const config = modelRegistry[localSettings.selectedProvider];
-      const isValidModel = config.models.some(m => m.id === localSettings.selectedModel);
-      if (!isValidModel) {
-        setLocalSettings(prev => ({
-          ...prev,
-          selectedModel: config.defaultModel,
-        }));
-      }
-    }
-  }, [localSettings.selectedProvider, modelRegistry]);
-
-  const handleProviderChange = (provider: LLMProvider) => {
-    setLocalSettings(prev => ({
-      ...prev,
-      selectedProvider: provider,
-      selectedModel: modelRegistry?.[provider]?.defaultModel || prev.selectedModel,
-    }));
-  };
-
-  const handleModelChange = (model: string) => {
-    setLocalSettings(prev => ({
-      ...prev,
-      selectedModel: model,
-    }));
-  };
-
-  const handleApiKeyChange = (provider: LLMProvider, value: string) => {
-    setLocalSettings(prev => ({
-      ...prev,
-      apiKeys: {
-        ...prev.apiKeys,
-        [provider]: value || undefined,
-      },
-    }));
-  };
-
-  const handleSave = () => {
+  const handleSave = async () => {
+    // Save settings
     onSave(localSettings);
+
+    // Save life contexts locally
+    storeLifeContexts(userId, lifeContexts);
+
+    // Sync life contexts to cloud in background
+    pushLifeContextsToCloud(userId, lifeContexts);
+
     setSaved(true);
     setTimeout(() => {
       onClose();
     }, 500);
   };
-
-  const hasApiKey = !!localSettings.apiKeys[localSettings.selectedProvider];
 
   if (!isOpen) return null;
 
@@ -90,7 +59,7 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           <div className="flex items-center gap-2">
             <Settings className="w-5 h-5 text-garmin-blue" />
-            <h2 className="text-lg font-semibold">LLM Settings</h2>
+            <h2 className="text-lg font-semibold">Settings</h2>
           </div>
           <button
             onClick={onClose}
@@ -102,100 +71,72 @@ export function SettingsModal({ isOpen, onClose, settings, onSave }: SettingsMod
 
         {/* Content */}
         <div className="p-4 space-y-6">
-          <p className="text-slate-400 text-sm">
-            Configure your AI provider and API key. These settings are saved locally and will persist across sessions.
-          </p>
+          {/* Life Context Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Heart className="w-5 h-5 text-pink-400" />
+              <h3 className="font-semibold">Life Context</h3>
+            </div>
+            <p className="text-slate-400 text-sm mb-4">
+              Add personal circumstances that may affect your health metrics. This helps the AI provide more relevant and personalized analysis.
+            </p>
+            <LifeContextSelector
+              contexts={lifeContexts}
+              onChange={setLifeContexts}
+            />
+          </div>
 
-          {modelsLoading ? (
-            <LoadingSpinner message="Loading available models..." size="sm" />
-          ) : modelRegistry ? (
-            <div className="space-y-4">
-              {/* Provider Selection */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Provider</label>
-                <div className="flex gap-2">
-                  {(Object.keys(modelRegistry) as LLMProvider[]).map(provider => {
-                    const config = modelRegistry[provider];
-                    const hasKey = !!localSettings.apiKeys[provider];
-                    return (
-                      <button
-                        key={provider}
-                        className={`
-                          px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2
-                          ${localSettings.selectedProvider === provider
-                            ? 'bg-garmin-blue text-white'
-                            : 'bg-slate-700 text-white hover:bg-slate-600'}
-                        `}
-                        onClick={() => handleProviderChange(provider)}
-                      >
-                        {config.name}
-                        {hasKey && <CheckCircle className="w-4 h-4 text-green-400" />}
-                      </button>
-                    );
-                  })}
-                </div>
+          {/* Model Preferences Section - Only for paid tier */}
+          {advancedModelAvailable && (
+            <div className="border-t border-slate-700 pt-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="w-5 h-5 text-amber-400" />
+                <h3 className="font-semibold">AI Model Preferences</h3>
               </div>
+              <p className="text-slate-400 text-sm mb-4">
+                Choose your default AI model for health analysis.
+              </p>
 
-              {/* Model Selection */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Model</label>
-                <div className="flex items-center gap-2">
-                  <Cpu className="w-4 h-4 text-slate-400" />
-                  <select
-                    className="input-field flex-1"
-                    value={localSettings.selectedModel}
-                    onChange={e => handleModelChange(e.target.value)}
-                  >
-                    {modelRegistry[localSettings.selectedProvider].models.map(model => (
-                      <option key={model.id} value={model.id}>
-                        {model.name} - {model.description}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* API Keys */}
-              <div>
-                <label className="block text-sm font-medium mb-2">API Keys</label>
-                <div className="space-y-3">
-                  {(Object.keys(modelRegistry) as LLMProvider[]).map(provider => {
-                    const config = modelRegistry[provider];
-                    return (
-                      <div key={provider} className="flex items-center gap-2">
-                        <span className="w-24 text-sm text-slate-400">{config.name}</span>
-                        <div className="relative flex-1">
-                          <input
-                            type={showApiKeys[provider] ? 'text' : 'password'}
-                            className="input-field pr-10 text-sm w-full"
-                            placeholder={`Enter ${config.name} API key...`}
-                            value={localSettings.apiKeys[provider] || ''}
-                            onChange={e => handleApiKeyChange(provider, e.target.value)}
-                          />
-                          <button
-                            type="button"
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                            onClick={() => setShowApiKeys(prev => ({ ...prev, [provider]: !prev[provider] }))}
-                          >
-                            {showApiKeys[provider] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          </button>
-                        </div>
-                        {localSettings.apiKeys[provider] && (
-                          <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+              <div className="p-3 bg-slate-700/50 rounded-lg">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={localSettings.preferAdvancedModel ?? false}
+                    onChange={e => setLocalSettings(prev => ({
+                      ...prev,
+                      preferAdvancedModel: e.target.checked,
+                    }))}
+                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-garmin-blue focus:ring-garmin-blue focus:ring-offset-slate-800"
+                  />
+                  <div>
+                    <span className="font-medium text-white">Prefer Advanced Model</span>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Use {GEMINI_MODELS.PRO} for more detailed analysis (instead of {GEMINI_MODELS.FLASH})
+                    </p>
+                  </div>
+                </label>
               </div>
             </div>
-          ) : (
-            <Alert type="error" message="Failed to load available models" />
           )}
 
-          {!hasApiKey && (
-            <Alert type="warning" message="Please add an API key for the selected provider to use AI analysis." />
-          )}
+          {/* Tier Info */}
+          <div className="border-t border-slate-700 pt-6">
+            <div className="p-3 bg-slate-700/30 rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-400">Current Plan</span>
+                <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                  tier === 'paid' ? 'bg-blue-500 text-white' : 'bg-slate-600 text-slate-300'
+                }`}>
+                  {tier === 'paid' ? 'Pro' : 'Free'}
+                </span>
+              </div>
+              {tier === 'free' && (
+                <p className="text-xs text-slate-500 mt-2">
+                  Upgrade to Pro for advanced model access, more reports, chat features, and daily snapshots.
+                </p>
+              )}
+            </div>
+          </div>
 
           {saved && (
             <Alert type="success" message="Settings saved successfully!" />

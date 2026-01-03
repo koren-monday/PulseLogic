@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Download,
   Moon,
@@ -15,13 +15,21 @@ import { DailyInsight } from '../components/DailyInsight';
 import { QuickDailyInsight } from '../components/QuickDailyInsight';
 import { ActionTracker } from '../components/ActionTracker';
 import { TrendComparison } from '../components/TrendComparison';
-import type { GarminHealthData, LLMProvider } from '../types';
-import type { UserSettings } from '../utils/storage';
+import { useSubscription } from '../contexts/SubscriptionContext';
+import type { GarminHealthData } from '../types';
+
+const DATA_DAY_OPTIONS = [
+  { value: 7, label: '7 days' },
+  { value: 30, label: '30 days' },
+  { value: 180, label: '180 days' },
+  { value: 360, label: '360 days' },
+] as const;
 
 interface DataStepProps {
   onComplete: (data: GarminHealthData) => void;
   onBack: () => void;
-  userSettings: UserSettings;
+  userId: string;
+  preferAdvancedModel?: boolean;
 }
 
 function formatDuration(seconds: number): string {
@@ -30,9 +38,18 @@ function formatDuration(seconds: number): string {
   return `${hours}h ${minutes}m`;
 }
 
-export function DataStep({ onComplete, onBack, userSettings }: DataStepProps) {
-  const [days, setDays] = useState(7);
+export function DataStep({ onComplete, onBack, userId }: DataStepProps) {
+  const { maxDataDays, tier } = useSubscription();
+  const [days, setDays] = useState(Math.min(7, maxDataDays));
   const fetchMutation = useGarminData(days);
+
+  // Build options based on tier limits
+  const availableOptions = useMemo(() => {
+    return DATA_DAY_OPTIONS.map((opt) => ({
+      ...opt,
+      locked: opt.value > maxDataDays,
+    }));
+  }, [maxDataDays]);
 
   const handleFetch = async () => {
     try {
@@ -44,20 +61,6 @@ export function DataStep({ onComplete, onBack, userSettings }: DataStepProps) {
   };
 
   const data = fetchMutation.data;
-
-  // Get the first available provider with an API key for quick insight
-  const getAvailableProvider = (): { provider: LLMProvider; apiKey: string } | null => {
-    const providers: LLMProvider[] = ['openai', 'anthropic', 'google'];
-    for (const provider of providers) {
-      const apiKey = userSettings.apiKeys[provider];
-      if (apiKey) {
-        return { provider, apiKey };
-      }
-    }
-    return null;
-  };
-
-  const availableProvider = getAvailableProvider();
 
   return (
     <div className="space-y-6">
@@ -80,15 +83,32 @@ export function DataStep({ onComplete, onBack, userSettings }: DataStepProps) {
         <div className="flex items-center gap-4 mb-4">
           <label className="text-sm">Fetch data for the last</label>
           <select
-            className="input-field w-32"
+            className="input-field w-40"
             value={days}
-            onChange={e => setDays(Number(e.target.value))}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              if (value <= maxDataDays) {
+                setDays(value);
+              }
+            }}
           >
-            <option value={7}>7 days</option>
-            <option value={30}>30 days</option>
-            <option value={180}>180 days</option>
+            {availableOptions.map((opt) => (
+              <option
+                key={opt.value}
+                value={opt.value}
+                disabled={opt.locked}
+              >
+                {opt.label}{opt.locked ? ' 🔒' : ''}
+              </option>
+            ))}
           </select>
         </div>
+
+        {maxDataDays < 360 && tier === 'free' && (
+          <p className="text-xs text-slate-400 mb-4">
+            Upgrade to paid plan for up to 360 days of data history.
+          </p>
+        )}
 
         {fetchMutation.isError && (
           <Alert type="error" message={fetchMutation.error?.message || 'Failed to fetch data'} />
@@ -114,14 +134,7 @@ export function DataStep({ onComplete, onBack, userSettings }: DataStepProps) {
       {data && (
         <div className="space-y-4">
           {/* Quick Daily Insight - LLM-generated comparison of last day vs averages */}
-          {availableProvider && (
-            <QuickDailyInsight
-              healthData={data}
-              provider={availableProvider.provider}
-              apiKey={availableProvider.apiKey}
-              model={userSettings.selectedModel}
-            />
-          )}
+          <QuickDailyInsight healthData={data} userId={userId} />
 
           <h3 className="text-lg font-semibold">
             Data Retrieved: {data.dateRange.start} to {data.dateRange.end}

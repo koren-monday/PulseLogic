@@ -1,4 +1,5 @@
 import { Activity, Settings, LogOut, User, History, Target, TrendingUp, Zap } from 'lucide-react';
+import { useTierBadge } from '../contexts/SubscriptionContext';
 
 interface HeaderProps {
   displayName?: string;
@@ -12,6 +13,7 @@ interface HeaderProps {
 
 export function Header({ displayName, onSettingsClick, onHistoryClick, onActionsClick, onTrendsClick, onSnapshotClick, onLogout }: HeaderProps) {
   const isLoggedIn = !!displayName;
+  const tierBadge = useTierBadge();
 
   return (
     <header className="flex items-center justify-between py-6">
@@ -29,6 +31,9 @@ export function Header({ displayName, onSettingsClick, onHistoryClick, onActions
           <div className="flex items-center gap-2 text-slate-400">
             <User className="w-4 h-4" />
             <span className="text-sm hidden sm:inline">{displayName}</span>
+            <span className={`text-xs px-1.5 py-0.5 rounded text-white ${tierBadge.color}`}>
+              {tierBadge.label}
+            </span>
           </div>
 
           {/* Quick Snapshot Button - Primary action */}

@@ -1,80 +1,95 @@
-import { createOpenAI } from '@ai-sdk/openai';
-import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { LanguageModelV1 } from 'ai';
-
-export type LLMProvider = 'openai' | 'anthropic' | 'google';
+import { GEMINI_MODELS, type SubscriptionTier } from '../../types/subscription.js';
 
 export interface ModelInfo {
   id: string;
   name: string;
   description: string;
+  isAdvanced: boolean; // Pro model = advanced
 }
 
-export interface ProviderConfig {
-  name: string;
-  models: ModelInfo[];
-  defaultModel: string;
+// Server-provided API keys for all users
+// Free tier uses GEMINI_API_KEY_FREE, Paid tier uses GEMINI_API_KEY_PAID
+const GEMINI_API_KEY_FREE = process.env.GEMINI_API_KEY_FREE || '';
+const GEMINI_API_KEY_PAID = process.env.GEMINI_API_KEY_PAID || '';
+
+// Available Gemini models
+export const AVAILABLE_MODELS: ModelInfo[] = [
+  {
+    id: GEMINI_MODELS.FLASH,
+    name: 'Gemini 3 Flash',
+    description: 'Fast and cost-effective',
+    isAdvanced: false,
+  },
+  {
+    id: GEMINI_MODELS.PRO,
+    name: 'Gemini 3 Pro',
+    description: 'Advanced reasoning capabilities',
+    isAdvanced: true,
+  },
+];
+
+/**
+ * Check if the server has API keys configured.
+ */
+export function hasServerKeys(): boolean {
+  return !!GEMINI_API_KEY_FREE || !!GEMINI_API_KEY_PAID;
 }
 
-// Model registry - maps provider to available models
-export const MODEL_REGISTRY: Record<LLMProvider, ProviderConfig> = {
-  openai: {
-    name: 'OpenAI',
-    defaultModel: 'gpt-5.2',
-    models: [
-      { id: 'gpt-5.2', name: 'GPT-5.2', description: 'Most capable model for complex tasks' },
-      { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro', description: 'Uses more compute for better answers' },
-    ],
-  },
-  anthropic: {
-    name: 'Anthropic',
-    defaultModel: 'claude-sonnet-4-5-20250929',
-    models: [
-      { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5', description: 'Fast and intelligent' },
-      { id: 'claude-opus-4-5-20251101', name: 'Claude Opus 4.5', description: 'Most capable Claude model' },
-    ],
-  },
-  google: {
-    name: 'Google',
-    defaultModel: 'gemini-3-flash-preview',
-    models: [
-      { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'Fast and cost-effective' },
-      { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'Advanced reasoning capabilities' },
-    ],
-  },
-};
+/**
+ * Check if the server has the free tier API key configured.
+ */
+export function hasFreeKey(): boolean {
+  return !!GEMINI_API_KEY_FREE;
+}
 
-// Factory function to create a model instance based on provider, model ID, and API key
-export function createModel(
-  provider: LLMProvider,
-  modelId: string,
-  apiKey: string
-): LanguageModelV1 {
-  switch (provider) {
-    case 'openai': {
-      const openai = createOpenAI({ apiKey });
-      return openai(modelId);
-    }
-    case 'anthropic': {
-      const anthropic = createAnthropic({ apiKey });
-      return anthropic(modelId);
-    }
-    case 'google': {
-      const google = createGoogleGenerativeAI({ apiKey });
-      return google(modelId);
-    }
-    default:
-      throw new Error(`Unknown provider: ${provider}`);
+/**
+ * Check if the server has the paid tier API key configured.
+ */
+export function hasPaidKey(): boolean {
+  return !!GEMINI_API_KEY_PAID;
+}
+
+/**
+ * Get the appropriate API key for a subscription tier.
+ * Throws if key is not configured.
+ */
+export function getApiKeyForTier(tier: SubscriptionTier): string {
+  const key = tier === 'paid' ? GEMINI_API_KEY_PAID : GEMINI_API_KEY_FREE;
+  if (!key) {
+    throw new Error(`API key not configured for ${tier} tier`);
   }
+  return key;
 }
 
-// Get default model for a provider
-export function getDefaultModel(provider: LLMProvider): string {
-  return MODEL_REGISTRY[provider].defaultModel;
+/**
+ * Create a Gemini model instance for the given tier and model ID.
+ * Uses server-provided API keys.
+ */
+export function createModel(tier: SubscriptionTier, modelId: string): LanguageModelV1 {
+  const apiKey = getApiKeyForTier(tier);
+  const google = createGoogleGenerativeAI({ apiKey });
+  return google(modelId);
 }
 
-// Validate that a model ID exists for the given provider
-export function isValidModel(provider: LLMProvider, modelId: string): boolean {
-  return MODEL_REGISTRY[provider].models.some(m => m.id === modelId);
+/**
+ * Get model info by ID.
+ */
+export function getModelInfo(modelId: string): ModelInfo | undefined {
+  return AVAILABLE_MODELS.find(m => m.id === modelId);
+}
+
+/**
+ * Check if a model is the advanced (Pro) model.
+ */
+export function isAdvancedModel(modelId: string): boolean {
+  return modelId === GEMINI_MODELS.PRO;
+}
+
+/**
+ * Validate that a model ID exists.
+ */
+export function isValidModel(modelId: string): boolean {
+  return AVAILABLE_MODELS.some(m => m.id === modelId);
 }
