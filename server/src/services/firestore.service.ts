@@ -32,20 +32,41 @@ export interface UserData {
 // Initialize Firebase lazily
 let db: Firestore | null = null;
 
+function getServiceAccount(): object | null {
+  // First, try environment variable (for production/Render)
+  const envCredentials = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (envCredentials) {
+    try {
+      return JSON.parse(envCredentials);
+    } catch {
+      console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT env variable');
+    }
+  }
+
+  // Fall back to local file (for development)
+  const serviceAccountPath = resolve(process.cwd(), 'firebase-service-account.json');
+  if (existsSync(serviceAccountPath)) {
+    try {
+      return JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
+    } catch {
+      console.error('Failed to parse firebase-service-account.json');
+    }
+  }
+
+  return null;
+}
+
 function getDb(): Firestore | null {
   if (db) return db;
 
-  // Try to load service account
-  const serviceAccountPath = resolve(process.cwd(), 'firebase-service-account.json');
-
-  if (!existsSync(serviceAccountPath)) {
+  const serviceAccount = getServiceAccount();
+  if (!serviceAccount) {
     console.warn('Firebase service account not found. Cloud sync disabled.');
     return null;
   }
 
   try {
     if (getApps().length === 0) {
-      const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
       initializeApp({
         credential: cert(serviceAccount),
       });
