@@ -6,6 +6,7 @@ import { resolve } from 'path';
 // Types for user data
 export interface UserProfile {
   email: string;
+  garminUserId?: string;
   displayName?: string;
   createdAt: string;
   lastLoginAt: string;
@@ -74,16 +75,17 @@ export async function getUserData(userId: string): Promise<UserData | null> {
 }
 
 /**
- * Record user login - stores email for easy identification in Firebase console.
+ * Record user login - uses email as the document key for easy identification.
  * Creates profile if first login, updates lastLoginAt if existing.
+ * Also stores the Garmin userId for reference.
  */
-export async function recordUserLogin(userId: string, email: string): Promise<boolean> {
+export async function recordUserLogin(email: string, garminUserId?: string): Promise<boolean> {
   const firestore = getDb();
   if (!firestore) return false;
 
   try {
     const now = new Date().toISOString();
-    const userRef = firestore.collection('users').doc(userId);
+    const userRef = firestore.collection('users').doc(email);
     const doc = await userRef.get();
 
     if (!doc.exists || !doc.data()?.profile) {
@@ -92,6 +94,7 @@ export async function recordUserLogin(userId: string, email: string): Promise<bo
         {
           profile: {
             email,
+            garminUserId,
             createdAt: now,
             lastLoginAt: now,
           },
@@ -101,11 +104,14 @@ export async function recordUserLogin(userId: string, email: string): Promise<bo
       );
     } else {
       // Existing user - update last login
-      await userRef.update({
+      const updates: Record<string, unknown> = {
         'profile.lastLoginAt': now,
-        'profile.email': email, // Update in case email changed
         updatedAt: now,
-      });
+      };
+      if (garminUserId) {
+        updates['profile.garminUserId'] = garminUserId;
+      }
+      await userRef.update(updates);
     }
     return true;
   } catch (error) {

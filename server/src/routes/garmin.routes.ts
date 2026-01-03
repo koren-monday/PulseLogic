@@ -62,12 +62,10 @@ router.post(
       const result: LoginResult = await data.service.login({ username, password });
 
       if (result.success && result.session) {
-        // Record login in Firestore (stores email for easy identification)
-        if (result.session.userId) {
-          recordUserLogin(result.session.userId, username).catch(err => {
-            console.error('Failed to record login:', err);
-          });
-        }
+        // Record login in Firestore (email is the document key)
+        recordUserLogin(username, result.session.userId).catch(err => {
+          console.error('Failed to record login:', err);
+        });
 
         res.json({
           success: true,
@@ -75,7 +73,7 @@ router.post(
             sessionId: id,
             isAuthenticated: true,
             displayName: result.session.displayName,
-            userId: result.session.userId,
+            userId: username, // Return email as userId (now the primary identifier)
           },
         });
       } else if (result.requiresMFA && result.mfaSessionId) {
@@ -119,9 +117,9 @@ router.post(
       const result = await data.service.submitMFACode(mfaSessionId, code);
 
       if (result.success && result.session) {
-        // Record login in Firestore (stores email for easy identification)
-        if (result.session.userId && data.email) {
-          recordUserLogin(result.session.userId, data.email).catch(err => {
+        // Record login in Firestore (email is the document key)
+        if (data.email) {
+          recordUserLogin(data.email, result.session.userId).catch(err => {
             console.error('Failed to record login:', err);
           });
         }
@@ -132,7 +130,7 @@ router.post(
             sessionId: id,
             isAuthenticated: true,
             displayName: result.session.displayName,
-            userId: result.session.userId,
+            userId: data.email, // Return email as userId (now the primary identifier)
           },
         });
       } else {
@@ -165,12 +163,10 @@ router.post(
       const result = await data.service.restoreSession(email);
 
       if (result.success && result.session) {
-        // Record login in Firestore (stores email for easy identification)
-        if (result.session.userId) {
-          recordUserLogin(result.session.userId, email).catch(err => {
-            console.error('Failed to record login:', err);
-          });
-        }
+        // Record login in Firestore (email is the document key)
+        recordUserLogin(email, result.session.userId).catch(err => {
+          console.error('Failed to record login:', err);
+        });
 
         res.json({
           success: true,
@@ -178,7 +174,7 @@ router.post(
             sessionId: id,
             isAuthenticated: true,
             displayName: result.session.displayName,
-            userId: result.session.userId,
+            userId: email, // Return email as userId (now the primary identifier)
           },
         });
       } else {
