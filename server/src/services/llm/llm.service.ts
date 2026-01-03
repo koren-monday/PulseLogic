@@ -1,7 +1,7 @@
 import { generateText } from 'ai';
 import type { GarminHealthData, ChatMessage, LifeContext, StructuredAnalysis } from '../../types/index.js';
 import { createModel } from './models.js';
-import { GEMINI_MODELS, type SubscriptionTier } from '../../types/subscription.js';
+import { MODEL_IDS, type SubscriptionTier } from '../../types/subscription.js';
 import { buildSystemPrompt, buildUserPrompt, buildChatSystemPrompt, buildDailyInsightSystemPrompt, buildDailyInsightUserPrompt } from './provider.interface.js';
 import { parseAnalysisResponse } from './response-parser.js';
 
@@ -65,10 +65,10 @@ export interface AnalysisResult {
 function getModelForRequest(tier: SubscriptionTier, useAdvancedModel?: boolean): string {
   // Free tier always uses Flash
   if (tier === 'free') {
-    return GEMINI_MODELS.FLASH;
+    return MODEL_IDS.DEFAULT;
   }
   // Paid tier can choose Pro if requested
-  return useAdvancedModel ? GEMINI_MODELS.PRO : GEMINI_MODELS.FLASH;
+  return useAdvancedModel ? MODEL_IDS.ADVANCED : MODEL_IDS.DEFAULT;
 }
 
 /**
@@ -148,7 +148,7 @@ export async function generateDailyInsight(options: DailyInsightOptions): Promis
   const { tier, healthData } = options;
 
   // Daily insights always use Flash (fast and cheap)
-  const modelId = GEMINI_MODELS.FLASH;
+  const modelId = MODEL_IDS.DEFAULT;
   const model = createModel(tier, modelId);
 
   try {

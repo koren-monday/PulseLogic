@@ -153,7 +153,7 @@ export async function fetchAvailableModels(): Promise<ModelsResponse> {
 export interface AnalyzeOptions {
   userId: string;
   healthData: GarminHealthData;
-  useAdvancedModel?: boolean; // If true and paid tier, use Gemini Pro
+  useAdvancedModel?: boolean; // If true and paid tier, use advanced mode
   customPrompt?: string;
   lifeContexts?: LifeContext[];
 }

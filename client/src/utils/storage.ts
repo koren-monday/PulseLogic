@@ -44,7 +44,7 @@ export function clearGarminAuth(): void {
 // ============================================================================
 
 export interface UserSettings {
-  preferAdvancedModel?: boolean; // User prefers Gemini Pro when available (paid tier)
+  preferAdvancedModel?: boolean; // User prefers advanced mode when available (paid tier)
 }
 
 const DEFAULT_SETTINGS: UserSettings = {

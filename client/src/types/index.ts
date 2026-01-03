@@ -205,7 +205,7 @@ export const LIFE_CONTEXT_LABELS: Record<LifeContextType, { label: string; icon:
 export interface AnalysisRequest {
   userId: string;
   healthData: GarminHealthData;
-  useAdvancedModel?: boolean; // If true and paid tier, use Gemini Pro
+  useAdvancedModel?: boolean; // If true and paid tier, use advanced mode
   customPrompt?: string;
   lifeContexts?: LifeContext[];
 }

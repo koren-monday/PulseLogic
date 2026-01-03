@@ -18,7 +18,7 @@ import {
   recordChatMessage,
   getEffectiveTier,
 } from '../services/usage.service.js';
-import { isModelAllowed, GEMINI_MODELS } from '../types/subscription.js';
+import { isModelAllowed, MODEL_IDS } from '../types/subscription.js';
 
 const router = Router();
 
@@ -71,7 +71,7 @@ router.post(
 
       // Check if advanced model is allowed for this tier
       let effectiveUseAdvanced = useAdvancedModel;
-      if (useAdvancedModel && !isModelAllowed(tierInfo.tier, GEMINI_MODELS.PRO)) {
+      if (useAdvancedModel && !isModelAllowed(tierInfo.tier, MODEL_IDS.ADVANCED)) {
         effectiveUseAdvanced = false; // Force to Flash for free tier
       }
 
@@ -136,7 +136,7 @@ router.post(
 
       // Check if advanced model is allowed
       let effectiveUseAdvanced = useAdvancedModel;
-      if (useAdvancedModel && !isModelAllowed(tierInfo.tier, GEMINI_MODELS.PRO)) {
+      if (useAdvancedModel && !isModelAllowed(tierInfo.tier, MODEL_IDS.ADVANCED)) {
         effectiveUseAdvanced = false;
       }
 

@@ -5,7 +5,7 @@ import { LifeContextSelector } from './LifeContextSelector';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { getLifeContexts, storeLifeContexts } from '../utils/storage';
 import { pushLifeContextsToCloud } from '../services/sync.service';
-import { canUseAdvancedModel, GEMINI_MODELS } from '../types/subscription';
+import { canUseAdvancedModel } from '../types/subscription';
 import type { UserSettings } from '../utils/storage';
 import type { LifeContext } from '../types';
 
@@ -91,10 +91,10 @@ export function SettingsModal({ isOpen, onClose, userId, settings, onSave }: Set
             <div className="border-t border-slate-700 pt-6">
               <div className="flex items-center gap-2 mb-3">
                 <Zap className="w-5 h-5 text-amber-400" />
-                <h3 className="font-semibold">AI Model Preferences</h3>
+                <h3 className="font-semibold">AI Agent Mode</h3>
               </div>
               <p className="text-slate-400 text-sm mb-4">
-                Choose your default AI model for health analysis.
+                Choose how your AI health agent analyzes your data.
               </p>
 
               <div className="p-3 bg-slate-700/50 rounded-lg">
@@ -109,9 +109,9 @@ export function SettingsModal({ isOpen, onClose, userId, settings, onSave }: Set
                     className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-garmin-blue focus:ring-garmin-blue focus:ring-offset-slate-800"
                   />
                   <div>
-                    <span className="font-medium text-white">Prefer Advanced Model</span>
+                    <span className="font-medium text-white">Enable Advanced Mode</span>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Use {GEMINI_MODELS.PRO} for more detailed analysis (instead of {GEMINI_MODELS.FLASH})
+                      Deep multi-step reasoning for comprehensive health insights
                     </p>
                   </div>
                 </label>
@@ -132,7 +132,7 @@ export function SettingsModal({ isOpen, onClose, userId, settings, onSave }: Set
               </div>
               {tier === 'free' && (
                 <p className="text-xs text-slate-500 mt-2">
-                  Upgrade to Pro for advanced model access, more reports, chat features, and daily snapshots.
+                  Upgrade to Pro for advanced AI agent mode, more reports, chat features, and daily snapshots.
                 </p>
               )}
             </div>

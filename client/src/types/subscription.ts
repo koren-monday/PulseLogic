@@ -38,10 +38,10 @@ export interface EffectiveTier {
   usage: UsageInfo;
 }
 
-// Available Gemini models
-export const GEMINI_MODELS = {
-  FLASH: 'gemini-3-flash-preview',
-  PRO: 'gemini-3-pro-preview',
+// Model tier identifiers (internal - do not expose to UI)
+export const MODEL_IDS = {
+  DEFAULT: 'gemini-3-flash-preview',
+  ADVANCED: 'gemini-3-pro-preview',
 } as const;
 
 // Tier configuration - mirrors server config
@@ -51,14 +51,14 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierLimits> = {
     maxReportsPerWeek: 1,
     maxChatMessagesPerReport: 1, // 1 follow-up per report
     maxSnapshotsPerDay: 0, // No snapshots
-    allowedModels: [GEMINI_MODELS.FLASH],
+    allowedModels: [MODEL_IDS.DEFAULT],
     canViewReportHistory: false, // Only latest report
   },
   'paid': {
     maxDataDays: 360, // Can choose 7, 30, 180, or 360
     maxLLMCommunicationsPerDay: 10, // Reports + chat combined
     maxSnapshotsPerDay: 1,
-    allowedModels: [GEMINI_MODELS.FLASH, GEMINI_MODELS.PRO],
+    allowedModels: [MODEL_IDS.DEFAULT, MODEL_IDS.ADVANCED],
     canViewReportHistory: true,
   },
 };
@@ -85,5 +85,5 @@ export function isModelAllowed(tier: SubscriptionTier, modelId: string): boolean
 }
 
 export function canUseAdvancedModel(tier: SubscriptionTier): boolean {
-  return isModelAllowed(tier, GEMINI_MODELS.PRO);
+  return isModelAllowed(tier, MODEL_IDS.ADVANCED);
 }

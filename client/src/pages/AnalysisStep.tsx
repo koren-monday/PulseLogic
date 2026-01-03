@@ -7,7 +7,7 @@ import { LifeContextSelector } from '../components/LifeContextSelector';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { getLifeContexts, storeLifeContexts } from '../utils/storage';
 import { pushLifeContextsToCloud } from '../services/sync.service';
-import { canUseAdvancedModel, GEMINI_MODELS } from '../types/subscription';
+import { canUseAdvancedModel } from '../types/subscription';
 import type { GarminHealthData, AnalysisResponse, ChatMessage, LifeContext } from '../types';
 
 interface AnalysisStepProps {
@@ -58,7 +58,7 @@ export function AnalysisStep({
 
   // Check if user can use advanced model
   const advancedModelAvailable = canUseAdvancedModel(tier);
-  const activeModel = useAdvancedModel && advancedModelAvailable ? GEMINI_MODELS.PRO : GEMINI_MODELS.FLASH;
+  const activeModeName = useAdvancedModel && advancedModelAvailable ? 'Advanced' : 'Standard';
 
   // Persist life contexts when they change
   useEffect(() => {
@@ -184,15 +184,15 @@ export function AnalysisStep({
               <div>
                 <div className="flex items-center gap-2">
                   <Zap className="w-4 h-4 text-amber-400" />
-                  <span className="font-medium text-white">Use Advanced Model</span>
+                  <span className="font-medium text-white">Enable Advanced Mode</span>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Gemini Pro for more detailed, nuanced analysis
+                  Deep multi-step reasoning for comprehensive health insights
                 </p>
               </div>
             </label>
             <p className="text-xs text-slate-500 mt-2">
-              Using: <span className="text-slate-300">{activeModel}</span>
+              Mode: <span className="text-slate-300">{activeModeName}</span>
             </p>
           </div>
         )}
@@ -283,7 +283,7 @@ export function AnalysisStep({
                 </span>
               )}
               <span className="text-xs text-slate-500">
-                {activeModel}
+                {activeModeName} Mode
               </span>
               <button
                 className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
