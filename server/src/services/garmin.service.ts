@@ -62,17 +62,18 @@ export class GarminService {
 
   /**
    * Initial login attempt. If MFA is required, returns mfaSessionId for code submission.
+   *
+   * Flow:
+   * 1. Try login WITHOUT MFA config first (for non-MFA accounts)
+   * 2. If that fails with MFA-specific error, start MFA flow
+   * 3. If it fails with other errors, return error
    */
   async login(credentials: GarminCredentials): Promise<LoginResult> {
+    // Step 1: Try simple login without MFA config (for accounts without MFA)
     try {
-      // First, try a simple login without MFA session
       this.client = new GarminConnect({
         username: credentials.username,
         password: credentials.password,
-        mfa: {
-          type: 'file',
-          dir: this.mfaStorageDir,
-        },
       });
 
       await this.client.login();
@@ -94,32 +95,41 @@ export class GarminService {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Authentication failed';
 
-      // Check if MFA is required
-      if (message.includes('MFA') || message.includes('Ticket not found')) {
-        // Generate a session ID for MFA flow
-        const mfaSessionId = randomUUID();
+      // Check if this is an MFA-required error
+      const isMFARequired = message.includes('MFA') ||
+                            message.includes('mfa') ||
+                            message.includes('Ticket not found') ||
+                            message.includes('verification') ||
+                            message.includes('two-factor');
 
-        // Store the pending session
-        pendingMFASessions.set(mfaSessionId, {
-          credentials,
-          sessionId: mfaSessionId,
-          createdAt: Date.now(),
-        });
-
-        // Start the login process with MFA support in background
-        this.startMFALogin(mfaSessionId, credentials);
-
+      if (!isMFARequired) {
+        // Not an MFA error - it's a genuine auth failure
+        this.client = null;
         return {
           success: false,
-          requiresMFA: true,
-          mfaSessionId,
+          error: `Garmin login failed: ${message}`,
         };
       }
 
-      this.client = null;
+      // Step 2: MFA is required - start MFA flow
+      console.log('[GarminService] MFA required, starting MFA flow');
+
+      const mfaSessionId = randomUUID();
+
+      // Store the pending session
+      pendingMFASessions.set(mfaSessionId, {
+        credentials,
+        sessionId: mfaSessionId,
+        createdAt: Date.now(),
+      });
+
+      // Start the login process with MFA support in background
+      this.startMFALogin(mfaSessionId, credentials);
+
       return {
         success: false,
-        error: `Garmin login failed: ${message}`,
+        requiresMFA: true,
+        mfaSessionId,
       };
     }
   }
