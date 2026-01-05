@@ -4,6 +4,7 @@ import {
   saveUserSettings,
   saveLifeContexts,
   isFirestoreEnabled,
+  deleteUserAccount,
   saveReport,
   getReports,
   getReport,
@@ -20,6 +21,7 @@ import {
   type CloudReport,
   type CloudAction,
 } from '../services/firestore.service.js';
+import { deleteTokens } from '../services/token-storage.js';
 import { calculateStatistics, compareDayToStats } from '../services/statistics.service.js';
 import type { GarminHealthData } from '../types/index.js';
 
@@ -36,6 +38,32 @@ router.get('/sync-status', (_req: Request, res: Response) => {
       enabled: isFirestoreEnabled(),
     },
   });
+});
+
+/**
+ * POST /api/user/delete-account
+ * Delete user account and all associated data
+ */
+router.post('/delete-account', async (req: Request, res: Response) => {
+  const { userId } = req.body;
+
+  if (!userId) {
+    res.status(400).json({ success: false, error: 'userId required' });
+    return;
+  }
+
+  // Delete Firestore data and Firebase Auth user
+  const firestoreSuccess = await deleteUserAccount(userId);
+
+  // Delete Garmin tokens (userId is email)
+  await deleteTokens(userId);
+
+  if (!firestoreSuccess) {
+    res.status(500).json({ success: false, error: 'Failed to delete account' });
+    return;
+  }
+
+  res.json({ success: true });
 });
 
 /**

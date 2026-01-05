@@ -243,6 +243,13 @@ export async function saveCloudLifeContexts(userId: string, lifeContexts: unknow
   });
 }
 
+export async function deleteAccount(userId: string): Promise<void> {
+  await apiFetch('/user/delete-account', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
 // ============================================================================
 // Cloud Reports API
 // ============================================================================

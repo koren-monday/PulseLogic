@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Settings, X, Save, Zap, Heart } from 'lucide-react';
+import { Settings, X, Save, Zap, Heart, Trash2, AlertTriangle } from 'lucide-react';
 import { Alert } from './Alert';
 import { LifeContextSelector } from './LifeContextSelector';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { getLifeContexts, storeLifeContexts } from '../utils/storage';
 import { pushLifeContextsToCloud } from '../services/sync.service';
+import { deleteAccount } from '../services/api';
 import { canUseAdvancedModel } from '../types/subscription';
 import type { UserSettings } from '../utils/storage';
 import type { LifeContext } from '../types';
@@ -15,13 +16,17 @@ interface SettingsModalProps {
   userId: string;
   settings: UserSettings;
   onSave: (settings: UserSettings) => void;
+  onDeleteAccount: () => Promise<void>;
 }
 
-export function SettingsModal({ isOpen, onClose, userId, settings, onSave }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, userId, settings, onSave, onDeleteAccount }: SettingsModalProps) {
   const { tier } = useSubscription();
   const [localSettings, setLocalSettings] = useState<UserSettings>(settings);
   const [lifeContexts, setLifeContexts] = useState<LifeContext[]>([]);
   const [saved, setSaved] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const advancedModelAvailable = canUseAdvancedModel(tier);
 
@@ -31,8 +36,22 @@ export function SettingsModal({ isOpen, onClose, userId, settings, onSave }: Set
       setLocalSettings(settings);
       setLifeContexts(getLifeContexts(userId));
       setSaved(false);
+      setShowDeleteConfirm(false);
+      setDeleteError(null);
     }
   }, [isOpen, settings, userId]);
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAccount(userId);
+      await onDeleteAccount();
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Failed to delete account');
+      setIsDeleting(false);
+    }
+  };
 
   const handleSave = async () => {
     // Save settings
@@ -136,6 +155,69 @@ export function SettingsModal({ isOpen, onClose, userId, settings, onSave }: Set
                 </p>
               )}
             </div>
+          </div>
+
+          {/* Delete Account Section */}
+          <div className="border-t border-slate-700 pt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Trash2 className="w-5 h-5 text-red-400" />
+              <h3 className="font-semibold text-red-400">Delete Account</h3>
+            </div>
+
+            {!showDeleteConfirm ? (
+              <div>
+                <p className="text-slate-400 text-sm mb-4">
+                  Permanently delete your account and all associated data. This action cannot be undone.
+                </p>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="px-4 py-2 text-sm font-medium text-red-400 border border-red-400/50 rounded-lg hover:bg-red-400/10 transition-colors"
+                >
+                  Delete Account
+                </button>
+              </div>
+            ) : (
+              <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg">
+                <div className="flex items-start gap-3 mb-4">
+                  <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-red-300 font-medium">Are you sure?</p>
+                    <p className="text-slate-400 text-sm mt-1">
+                      This will permanently delete your account, all reports, actions, statistics, and settings. You will be logged out immediately.
+                    </p>
+                  </div>
+                </div>
+                {deleteError && (
+                  <Alert type="error" message={deleteError} />
+                )}
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={isDeleting}
+                    className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={isDeleting}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <span className="animate-spin">⏳</span>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        Yes, Delete My Account
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {saved && (

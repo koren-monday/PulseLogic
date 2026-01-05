@@ -1,5 +1,6 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
@@ -221,6 +222,47 @@ export async function saveUserData(userId: string, data: UserData): Promise<bool
 // Check if Firestore is available
 export function isFirestoreEnabled(): boolean {
   return getDb() !== null;
+}
+
+/**
+ * Delete a user account and all associated data.
+ * This includes: user document, all subcollections, and Firebase Auth user.
+ */
+export async function deleteUserAccount(userId: string): Promise<boolean> {
+  const firestore = getDb();
+  if (!firestore) return false;
+
+  try {
+    const userRef = firestore.collection('users').doc(userId);
+
+    // Delete all subcollections
+    const subcollections = ['reports', 'actions', 'statistics', 'usage'];
+    for (const subcollection of subcollections) {
+      const snapshot = await userRef.collection(subcollection).get();
+      if (!snapshot.empty) {
+        const batch = firestore.batch();
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+      }
+    }
+
+    // Delete main user document
+    await userRef.delete();
+
+    // Delete Firebase Auth user
+    try {
+      await getAuth().deleteUser(userId);
+    } catch (authError) {
+      // User might not exist in Firebase Auth (e.g., if using fallback auth)
+      console.warn('Could not delete Firebase Auth user (may not exist):', authError);
+    }
+
+    console.log(`Deleted user account: ${userId}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to delete user account:', error);
+    return false;
+  }
 }
 
 // ============================================================================

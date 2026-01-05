@@ -381,6 +381,23 @@ yarn build:android
 
 ---
 
+## Privacy & Account Deletion
+
+Users can delete their account and all associated data:
+
+- **In-app**: Settings > Delete Account
+- **Web**: https://garmin-insights-web.onrender.com/delete-account
+
+This permanently deletes:
+- User profile and settings
+- All health reports and analysis history
+- Saved actions and tracking data
+- Personal statistics and trends
+- Firebase authentication record
+- Stored Garmin tokens
+
+---
+
 ## License
 
 MIT

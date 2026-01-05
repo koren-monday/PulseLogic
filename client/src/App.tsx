@@ -243,6 +243,10 @@ function App() {
               userId={userId}
               settings={userSettings}
               onSave={handleSettingsSave}
+              onDeleteAccount={async () => {
+                setShowSettings(false);
+                await handleLogout();
+              }}
             />
           )}
 
