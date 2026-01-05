@@ -383,6 +383,8 @@ yarn build:android
 
 ## Privacy & Account Deletion
 
+**Privacy Policy:** https://garmin-insights-web.onrender.com/privacy
+
 Users can delete their account and all associated data:
 
 - **In-app**: Settings > Delete Account

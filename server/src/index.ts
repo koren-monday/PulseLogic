@@ -69,6 +69,99 @@ app.use(express.urlencoded({ extended: true }));
 // Public Pages (for app store compliance)
 // ============================================================================
 
+app.get('/privacy', (_req, res) => {
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - Garmin Insights</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 40px 20px; }
+    .container { max-width: 700px; margin: 0 auto; }
+    h1 { color: #f8fafc; margin-bottom: 8px; font-size: 28px; }
+    .updated { color: #64748b; font-size: 14px; margin-bottom: 32px; }
+    h2 { color: #f8fafc; font-size: 18px; margin: 32px 0 12px; }
+    p, li { line-height: 1.7; color: #94a3b8; margin-bottom: 12px; }
+    ul { padding-left: 24px; margin-bottom: 16px; }
+    .highlight { background: #1e293b; border-radius: 8px; padding: 20px; margin: 24px 0; border-left: 4px solid #3b82f6; }
+    .highlight p { margin-bottom: 0; color: #cbd5e1; }
+    a { color: #60a5fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid #334155; color: #64748b; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: January 2025</p>
+
+    <p>Garmin Insights ("we", "our", or "the app") is committed to protecting your privacy. This policy explains how we handle your data.</p>
+
+    <div class="highlight">
+      <p><strong>Key Points:</strong> Your health data is never shared with third parties. Health and fitness data is processed ephemerally for analysis and is not permanently stored on our servers.</p>
+    </div>
+
+    <h2>Data We Collect</h2>
+    <p>When you use Garmin Insights, we access the following data from your Garmin Connect account:</p>
+    <ul>
+      <li>Sleep metrics (duration, quality, sleep stages)</li>
+      <li>Stress levels and body battery</li>
+      <li>Heart rate data</li>
+      <li>Activity and workout summaries</li>
+    </ul>
+
+    <h2>How We Use Your Data</h2>
+    <p><strong>Health & Fitness Data:</strong> Your health data is transmitted directly to AI services (Google Gemini) for analysis and is processed ephemerally. We do not permanently store your raw health metrics on our servers. The data exists only for the duration of the analysis request.</p>
+
+    <p><strong>Analysis Reports:</strong> The AI-generated insights and recommendations may be stored to provide you with report history. These reports contain summaries and recommendations, not your raw health data.</p>
+
+    <p><strong>Account Information:</strong> We store your email address for account identification and to sync your settings across devices.</p>
+
+    <h2>Data Sharing</h2>
+    <p>We do not sell, rent, or share your personal data with third parties for marketing purposes. Your data is only processed by:</p>
+    <ul>
+      <li><strong>Google AI (Gemini):</strong> For generating health insights. Data is processed according to Google's AI terms.</li>
+      <li><strong>Firebase:</strong> For authentication and settings storage.</li>
+      <li><strong>RevenueCat:</strong> For subscription management (payment info only, no health data).</li>
+    </ul>
+
+    <h2>Data Security</h2>
+    <p>We use industry-standard security measures:</p>
+    <ul>
+      <li>All data transmission is encrypted (HTTPS/TLS)</li>
+      <li>Garmin OAuth tokens are encrypted at rest</li>
+      <li>No raw health data is permanently stored</li>
+    </ul>
+
+    <h2>Your Rights</h2>
+    <p>You have the right to:</p>
+    <ul>
+      <li><strong>Access:</strong> View your stored data within the app</li>
+      <li><strong>Delete:</strong> Remove your account and all associated data at any time via Settings > Delete Account or at <a href="/delete-account">/delete-account</a></li>
+      <li><strong>Disconnect:</strong> Revoke Garmin access through your Garmin Connect settings</li>
+    </ul>
+
+    <h2>Children's Privacy</h2>
+    <p>Garmin Insights is not intended for users under 13 years of age. We do not knowingly collect data from children.</p>
+
+    <h2>Changes to This Policy</h2>
+    <p>We may update this policy periodically. Significant changes will be communicated through the app.</p>
+
+    <h2>Contact Us</h2>
+    <p>For privacy questions or concerns, contact us at <a href="mailto:support@garmin-insights.com">support@garmin-insights.com</a></p>
+
+    <div class="footer">
+      <p>Garmin Insights is not affiliated with Garmin Ltd. or its subsidiaries.</p>
+    </div>
+  </div>
+</body>
+</html>
+  `);
+});
+
 app.get('/delete-account', (_req, res) => {
   res.send(`
 <!DOCTYPE html>
