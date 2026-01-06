@@ -160,6 +160,7 @@ yarn cap:open
 | `yarn cap:sync` | Sync web assets to Android |
 | `yarn cap:open` | Open project in Android Studio |
 | `yarn build:android` | Build + sync in one command |
+| `yarn deploy:android` | Build, sync, compile APK, and install to connected device |
 
 ### Release Build
 

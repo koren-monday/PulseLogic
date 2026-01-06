@@ -20,7 +20,8 @@
     "build": "yarn workspace garmin-insights-server build && yarn workspace client build",
     "build:server": "yarn workspace garmin-insights-server build",
     "build:client": "yarn workspace client build",
-    "typecheck": "yarn workspace garmin-insights-server typecheck"
+    "typecheck": "yarn workspace garmin-insights-server typecheck",
+    "deploy:android": "yarn workspace client deploy:android"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
