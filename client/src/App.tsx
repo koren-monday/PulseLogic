@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
+import { Activity } from 'lucide-react';
 import { Header } from './components/Header';
 import { SettingsModal } from './components/SettingsModal';
 import { Paywall } from './components/Paywall';
