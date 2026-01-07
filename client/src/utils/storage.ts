@@ -18,6 +18,17 @@ export function getSessionId(): string | null {
 
 export function clearSession(): void {
   localStorage.removeItem(`${STORAGE_KEY_PREFIX}session`);
+  localStorage.removeItem(`${STORAGE_KEY_PREFIX}current_user`);
+}
+
+/**
+ * Clear all authentication-related data from storage.
+ * Use this for complete logout to ensure no stale auth data remains.
+ */
+export function clearAllAuthData(): void {
+  localStorage.removeItem(`${STORAGE_KEY_PREFIX}session`);
+  localStorage.removeItem(`${STORAGE_KEY_PREFIX}current_user`);
+  localStorage.removeItem(`${STORAGE_KEY_PREFIX}garmin_email`);
 }
 
 // ============================================================================
@@ -87,6 +98,16 @@ export function storeCurrentUserId(userId: string): void {
 
 export function getCurrentUserId(): string | null {
   return localStorage.getItem(`${STORAGE_KEY_PREFIX}current_user`);
+}
+
+/**
+ * Validate that a complete session exists in storage.
+ * Checks for both session ID and user ID.
+ */
+export function hasValidStoredSession(): boolean {
+  const sessionId = getSessionId();
+  const userId = getCurrentUserId();
+  return !!(sessionId && userId);
 }
 
 // ============================================================================

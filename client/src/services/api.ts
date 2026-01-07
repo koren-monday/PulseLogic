@@ -11,9 +11,19 @@ import type {
   UserStatistics,
   StatisticsCompareResult,
 } from '../types';
-import { getSessionId, storeSessionId, storeGarminEmail, clearGarminAuth } from '../utils/storage';
+import { getSessionId, storeSessionId, storeGarminEmail, clearGarminAuth, clearAllAuthData } from '../utils/storage';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+/**
+ * Event that fires when a 401 Unauthorized error occurs.
+ * This allows the app to handle auth failures globally.
+ */
+export const AUTH_ERROR_EVENT = 'auth-error';
+
+function notifyAuthError() {
+  window.dispatchEvent(new CustomEvent(AUTH_ERROR_EVENT));
+}
 
 /**
  * Base fetch wrapper with common headers and error handling
@@ -32,6 +42,14 @@ async function apiFetch<T>(
       ...options.headers,
     },
   });
+
+  // Handle 401 Unauthorized globally
+  if (response.status === 401) {
+    console.error('Authentication failed: 401 Unauthorized');
+    clearAllAuthData();
+    notifyAuthError();
+    throw new Error('Your session has expired. Please login again.');
+  }
 
   const data: ApiResponse<T> = await response.json();
 

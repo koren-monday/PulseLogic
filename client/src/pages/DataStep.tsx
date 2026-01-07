@@ -112,7 +112,19 @@ export function DataStep({ onComplete, onBack, userId }: DataStepProps) {
         )}
 
         {fetchMutation.isError && (
-          <Alert type="error" message={fetchMutation.error?.message || 'Failed to fetch data'} />
+          <div className="space-y-3">
+            <Alert
+              type="error"
+              message={fetchMutation.error?.message || 'Failed to fetch data'}
+            />
+            {fetchMutation.error?.message?.includes('session') ||
+             fetchMutation.error?.message?.includes('login') ||
+             fetchMutation.error?.message?.includes('authenticated') ? (
+              <p className="text-sm text-slate-400">
+                Your Garmin session has expired. Please logout and login again.
+              </p>
+            ) : null}
+          </div>
         )}
 
         <button

@@ -4,6 +4,7 @@ import { useGarminLogin, useGarminMFA, useGarminRestore } from '../hooks';
 import { Alert } from '../components/Alert';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { getGarminEmail } from '../utils/storage';
+import { clearAllAuthData } from '../utils/storage';
 import { signInWithToken } from '../config/firebase';
 import type { GarminCredentials } from '../types';
 
@@ -36,8 +37,17 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   useEffect(() => {
     if (storedEmail && !restoreAttempted) {
       setRestoreAttempted(true);
+
+      // Set up a timeout to prevent infinite loading
+      const timeout = setTimeout(() => {
+        console.warn('Session restore timed out');
+        clearAllAuthData();
+        setIsRestoring(false);
+      }, 5000); // 5 second timeout
+
       restoreMutation.mutate(storedEmail, {
         onSuccess: async (session) => {
+          clearTimeout(timeout);
           if (session?.isAuthenticated) {
             // Sign in to Firebase with custom token (silent - user doesn't see this)
             if (session.firebaseToken) {
@@ -47,10 +57,16 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             }
             onLoginSuccess(session.userId || session.sessionId, session.displayName || storedEmail);
           } else {
+            // Restore failed - clear stored data to force fresh login
+            clearAllAuthData();
             setIsRestoring(false);
           }
         },
-        onError: () => {
+        onError: (error) => {
+          clearTimeout(timeout);
+          console.error('Session restore failed:', error);
+          // Clear all stored auth data on restore failure
+          clearAllAuthData();
           setIsRestoring(false);
         },
       });

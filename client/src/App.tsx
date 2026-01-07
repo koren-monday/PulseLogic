@@ -18,13 +18,13 @@ import {
   storeUserSettings,
   storeCurrentUserId,
   getCurrentUserId,
-  clearSession,
+  hasValidStoredSession,
   type UserSettings,
 } from './utils/storage';
 import { syncOnLogin, syncReportsAndActionsOnLogin } from './services/sync.service';
-import { clearAllData } from './services/storage.service';
-import { loginToPurchases, logoutFromPurchases } from './services/purchases';
-import { firebaseSignOut } from './config/firebase';
+import { loginToPurchases } from './services/purchases';
+import { performLogout, validateSessionWithServer } from './utils/auth-helpers';
+import { AUTH_ERROR_EVENT } from './services/api';
 import type { GarminHealthData } from './types';
 import type { SavedReport } from './db/schema';
 
@@ -35,6 +35,7 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string>('');
+  const [isValidatingSession, setIsValidatingSession] = useState(true);
 
   // App state
   const [currentStep, setCurrentStep] = useState<AppStep>('data');
@@ -50,18 +51,59 @@ function App() {
     preferAdvancedModel: false,
   });
 
-  // Check for existing session on mount
+  // Listen for auth errors from API and trigger logout
   useEffect(() => {
-    const storedUserId = getCurrentUserId();
-    if (storedUserId) {
-      setUserId(storedUserId);
-      setDisplayName(storedUserId); // Use userId as fallback display name
-      setUserSettings(getUserSettings(storedUserId));
-      setIsLoggedIn(true);
+    const handleAuthError = () => {
+      console.warn('Auth error detected - logging out');
+      handleLogout();
+    };
 
-      // Login to RevenueCat if on native platform
-      loginToPurchases(storedUserId).catch(console.error);
-    }
+    window.addEventListener(AUTH_ERROR_EVENT, handleAuthError);
+    return () => window.removeEventListener(AUTH_ERROR_EVENT, handleAuthError);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Check for existing session on mount and validate with server
+  useEffect(() => {
+    const validateAndRestoreSession = async () => {
+      try {
+        // Check if we have stored session data
+        if (!hasValidStoredSession()) {
+          setIsValidatingSession(false);
+          return;
+        }
+
+        const storedUserId = getCurrentUserId();
+        if (!storedUserId) {
+          setIsValidatingSession(false);
+          return;
+        }
+
+        // Validate session with server
+        const isValid = await validateSessionWithServer();
+
+        if (isValid) {
+          // Session is valid - restore the session
+          setUserId(storedUserId);
+          setDisplayName(storedUserId);
+          setUserSettings(getUserSettings(storedUserId));
+          setIsLoggedIn(true);
+
+          // Login to RevenueCat if on native platform
+          loginToPurchases(storedUserId).catch(console.error);
+        } else {
+          // Session is invalid - clear everything and show login
+          console.warn('Stored session is invalid or expired');
+          await performLogout();
+        }
+      } catch (error) {
+        console.error('Session validation failed:', error);
+        await performLogout();
+      } finally {
+        setIsValidatingSession(false);
+      }
+    };
+
+    validateAndRestoreSession();
   }, []);
 
   // Handle Android back button
@@ -125,16 +167,10 @@ function App() {
   };
 
   const handleLogout = async () => {
-    clearSession();
+    // Perform comprehensive logout (clears local state immediately)
+    await performLogout();
 
-    // Logout from Firebase and RevenueCat
-    await Promise.all([
-      firebaseSignOut().catch(console.error),
-      logoutFromPurchases().catch(console.error),
-    ]);
-
-    // Clear IndexedDB to prevent data leaking between accounts
-    await clearAllData();
+    // Update UI state
     setIsLoggedIn(false);
     setUserId(null);
     setDisplayName('');
@@ -162,6 +198,18 @@ function App() {
     setCurrentStep('data');
     setHealthData(null);
   };
+
+  // Show loading while validating session
+  if (isValidatingSession) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <Activity className="w-12 h-12 text-garmin-blue animate-pulse mx-auto mb-4" />
+          <p className="text-slate-400">Validating session...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Show login page if not logged in
   if (!isLoggedIn) {
