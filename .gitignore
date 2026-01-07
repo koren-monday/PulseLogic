@@ -38,3 +38,6 @@ coverage/
 # Garmin session data (contains OAuth tokens - NEVER commit)
 .garmin-tokens/
 .mfa-sessions/
+
+# Claude mem
+**/CLAUDE.md
