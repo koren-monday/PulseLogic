@@ -94,37 +94,48 @@ function App() {
 
         // Session is valid - now restore with full sync
         try {
+          console.log('[App] Restoring Garmin session for:', storedEmail);
           const session = await restoreGarminSession(storedEmail);
 
           if (session?.isAuthenticated) {
+            console.log('[App] Garmin session restored:', { displayName: session.displayName });
+
             // Sign in to Firebase with custom token
             if (session.firebaseToken) {
+              console.log('[App] Signing in to Firebase...');
               await signInWithToken(session.firebaseToken).catch(err => {
-                console.warn('Firebase sign-in failed, continuing with Garmin auth:', err);
+                console.warn('[App] Firebase sign-in failed, continuing with Garmin auth:', err);
               });
             }
 
             // Set auth state
+            console.log('[App] Setting auth state for userId:', storedUserId);
             setUserId(storedUserId);
             setDisplayName(session.displayName || storedUserId);
 
             // Login to RevenueCat
-            loginToPurchases(storedUserId).catch(console.error);
+            console.log('[App] Logging in to RevenueCat...');
+            loginToPurchases(storedUserId).catch(err => {
+              console.error('[App] RevenueCat login failed:', err);
+            });
 
             // Sync user data from cloud (life contexts, etc.)
+            console.log('[App] Syncing user data from cloud...');
             const syncedSettings = await syncOnLogin(storedUserId);
+            console.log('[App] Synced settings:', syncedSettings);
             setUserSettings(syncedSettings);
             setIsLoggedIn(true);
 
             // Sync reports and actions in background
+            console.log('[App] Syncing reports and actions in background...');
             syncReportsAndActionsOnLogin(storedUserId);
           } else {
             // Restore failed
-            console.warn('Session restore failed');
+            console.warn('[App] Session restore failed - no authenticated session');
             await performLogout();
           }
         } catch (restoreError) {
-          console.error('Full session restore failed:', restoreError);
+          console.error('[App] Full session restore failed:', restoreError);
           await performLogout();
         }
       } catch (error) {
@@ -182,19 +193,26 @@ function App() {
   }, [currentStep, showPaywall, showSettings, showSnapshot, viewingReport]);
 
   const handleLoginSuccess = async (newUserId: string, newDisplayName: string) => {
+    console.log('[App] Login success:', { userId: newUserId, displayName: newDisplayName });
     setUserId(newUserId);
     setDisplayName(newDisplayName);
     storeCurrentUserId(newUserId);
 
     // Login to RevenueCat with the userId (Firebase UID or email)
-    loginToPurchases(newUserId).catch(console.error);
+    console.log('[App] Logging in to RevenueCat...');
+    loginToPurchases(newUserId).catch(err => {
+      console.error('[App] RevenueCat login failed:', err);
+    });
 
     // Sync with cloud (only life contexts now - no API key settings)
+    console.log('[App] Syncing user data from cloud...');
     const syncedSettings = await syncOnLogin(newUserId);
+    console.log('[App] Synced settings:', syncedSettings);
     setUserSettings(syncedSettings);
     setIsLoggedIn(true);
 
     // Sync reports and actions from cloud in background
+    console.log('[App] Syncing reports and actions in background...');
     syncReportsAndActionsOnLogin(newUserId);
   };
 

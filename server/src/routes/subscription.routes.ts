@@ -10,6 +10,7 @@ import {
   getUserSubscription,
   setUserSubscription,
   getUserProfile,
+  syncRevenueCatSubscription,
 } from '../services/firestore.service.js';
 import { hasServerKeys, AVAILABLE_MODELS } from '../services/llm/models.js';
 import type { SubscriptionTier } from '../types/subscription.js';
@@ -32,8 +33,21 @@ router.post('/tier', async (req: Request, res: Response) => {
   }
 
   try {
+    console.log(`[/tier] Fetching subscription for user: ${userId}`);
+
+    // Get current subscription from Firestore
+    let subscription = await getUserSubscription(userId);
+    console.log(`[/tier] Firestore subscription:`, subscription);
+
+    // Sync with RevenueCat to ensure we have the latest data
+    // This helps catch cases where webhooks failed or user was just upgraded
+    const syncedSubscription = await syncRevenueCatSubscription(userId);
+    if (syncedSubscription) {
+      subscription = syncedSubscription;
+      console.log(`[/tier] Synced with RevenueCat:`, subscription);
+    }
+
     const tierInfo = await getTierInfoForClient(userId);
-    const subscription = await getUserSubscription(userId);
 
     res.json({
       success: true,

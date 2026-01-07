@@ -3,6 +3,11 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
+import {
+  getRevenueCatSubscriber,
+  getSubscriberTier,
+  getSubscriptionExpiration,
+} from './revenuecat.service.js';
 
 // Types for user data
 export interface UserProfile {
@@ -111,7 +116,7 @@ export async function recordUserLogin(email: string, garminUserId?: string): Pro
     const doc = await userRef.get();
 
     if (!doc.exists || !doc.data()?.profile) {
-      // First login - create profile
+      // First login - create profile with default subscription
       await userRef.set(
         {
           profile: {
@@ -120,10 +125,17 @@ export async function recordUserLogin(email: string, garminUserId?: string): Pro
             createdAt: now,
             lastLoginAt: now,
           },
+          subscription: {
+            tier: 'free',
+            status: 'active',
+            createdAt: now,
+            updatedAt: now,
+          },
           updatedAt: now,
         },
         { merge: true }
       );
+      console.log(`Created new user profile with default subscription: ${email}`);
     } else {
       // Existing user - update last login
       const updates: Record<string, unknown> = {
@@ -133,6 +145,19 @@ export async function recordUserLogin(email: string, garminUserId?: string): Pro
       if (garminUserId) {
         updates['profile.garminUserId'] = garminUserId;
       }
+
+      // Initialize subscription if it doesn't exist (for legacy users)
+      const userData = doc.data();
+      if (!userData?.subscription) {
+        updates['subscription'] = {
+          tier: 'free',
+          status: 'active',
+          createdAt: now,
+          updatedAt: now,
+        };
+        console.log(`Initialized missing subscription for existing user: ${email}`);
+      }
+
       await userRef.update(updates);
     }
     return true;
@@ -691,6 +716,53 @@ export async function setUserSubscription(
   } catch (error) {
     console.error('Failed to set user subscription:', error);
     return false;
+  }
+}
+
+/**
+ * Sync user subscription with RevenueCat.
+ * Queries RevenueCat API for current subscription status and updates Firestore.
+ * Returns the updated subscription, or null if sync failed.
+ */
+export async function syncRevenueCatSubscription(
+  userId: string
+): Promise<UserSubscription | null> {
+  console.log(`Syncing RevenueCat subscription for user: ${userId}`);
+
+  try {
+    // Query RevenueCat for subscriber info
+    const subscriber = await getRevenueCatSubscriber(userId);
+
+    if (!subscriber) {
+      console.log(`RevenueCat: No subscriber found for ${userId}, keeping current subscription`);
+      return await getUserSubscription(userId);
+    }
+
+    // Determine tier based on entitlements
+    const tier = getSubscriberTier(subscriber);
+    const currentPeriodEnd = getSubscriptionExpiration(subscriber);
+
+    console.log(`RevenueCat: User ${userId} has tier: ${tier}, expires: ${currentPeriodEnd || 'N/A'}`);
+
+    // Update Firestore with RevenueCat data
+    const updates: Partial<UserSubscription> = {
+      tier,
+      status: 'active',
+      currentPeriodEnd,
+    };
+
+    const success = await updateUserSubscription(userId, updates);
+
+    if (!success) {
+      console.error(`Failed to update subscription in Firestore for ${userId}`);
+      return null;
+    }
+
+    // Return updated subscription
+    return await getUserSubscription(userId);
+  } catch (error) {
+    console.error(`Failed to sync RevenueCat subscription for ${userId}:`, error);
+    return null;
   }
 }
 
