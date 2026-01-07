@@ -20,12 +20,14 @@ import {
   storeCurrentUserId,
   getCurrentUserId,
   hasValidStoredSession,
+  getGarminEmail,
   type UserSettings,
 } from './utils/storage';
 import { syncOnLogin, syncReportsAndActionsOnLogin } from './services/sync.service';
 import { loginToPurchases } from './services/purchases';
 import { performLogout, validateSessionWithServer } from './utils/auth-helpers';
-import { AUTH_ERROR_EVENT } from './services/api';
+import { AUTH_ERROR_EVENT, restoreGarminSession } from './services/api';
+import { signInWithToken } from './config/firebase';
 import type { GarminHealthData } from './types';
 import type { SavedReport } from './db/schema';
 
@@ -63,7 +65,7 @@ function App() {
     return () => window.removeEventListener(AUTH_ERROR_EVENT, handleAuthError);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Check for existing session on mount and validate with server
+  // Check for existing session on mount and restore with full sync
   useEffect(() => {
     const validateAndRestoreSession = async () => {
       try {
@@ -74,26 +76,56 @@ function App() {
         }
 
         const storedUserId = getCurrentUserId();
-        if (!storedUserId) {
+        const storedEmail = getGarminEmail();
+
+        if (!storedUserId || !storedEmail) {
           setIsValidatingSession(false);
           return;
         }
 
-        // Validate session with server
+        // First, do a quick validation check
         const isValid = await validateSessionWithServer();
 
-        if (isValid) {
-          // Session is valid - restore the session
-          setUserId(storedUserId);
-          setDisplayName(storedUserId);
-          setUserSettings(getUserSettings(storedUserId));
-          setIsLoggedIn(true);
-
-          // Login to RevenueCat if on native platform
-          loginToPurchases(storedUserId).catch(console.error);
-        } else {
-          // Session is invalid - clear everything and show login
+        if (!isValid) {
           console.warn('Stored session is invalid or expired');
+          await performLogout();
+          setIsValidatingSession(false);
+          return;
+        }
+
+        // Session is valid - now restore with full sync
+        try {
+          const session = await restoreGarminSession(storedEmail);
+
+          if (session?.isAuthenticated) {
+            // Sign in to Firebase with custom token
+            if (session.firebaseToken) {
+              await signInWithToken(session.firebaseToken).catch(err => {
+                console.warn('Firebase sign-in failed, continuing with Garmin auth:', err);
+              });
+            }
+
+            // Set auth state
+            setUserId(storedUserId);
+            setDisplayName(session.displayName || storedUserId);
+
+            // Login to RevenueCat
+            loginToPurchases(storedUserId).catch(console.error);
+
+            // Sync user data from cloud (life contexts, etc.)
+            const syncedSettings = await syncOnLogin(storedUserId);
+            setUserSettings(syncedSettings);
+            setIsLoggedIn(true);
+
+            // Sync reports and actions in background
+            syncReportsAndActionsOnLogin(storedUserId);
+          } else {
+            // Restore failed
+            console.warn('Session restore failed');
+            await performLogout();
+          }
+        } catch (restoreError) {
+          console.error('Full session restore failed:', restoreError);
           await performLogout();
         }
       } catch (error) {
