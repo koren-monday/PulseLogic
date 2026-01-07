@@ -15,7 +15,6 @@ import { TrendComparison } from './components/TrendComparison';
 import { QuickDailySnapshot } from './components/QuickDailySnapshot';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import {
-  getUserSettings,
   storeUserSettings,
   storeCurrentUserId,
   getCurrentUserId,
