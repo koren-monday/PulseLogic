@@ -1,6 +1,5 @@
 import { Activity, Settings, LogOut, User, History, Target, TrendingUp, Zap, Crown } from 'lucide-react';
 import { useTierBadge, useSubscription } from '../contexts/SubscriptionContext';
-import { isPurchasesAvailable } from '../services/purchases';
 
 interface HeaderProps {
   displayName?: string;
@@ -17,7 +16,7 @@ export function Header({ displayName, onSettingsClick, onHistoryClick, onActions
   const isLoggedIn = !!displayName;
   const tierBadge = useTierBadge();
   const { tier } = useSubscription();
-  const showUpgrade = tier === 'free' && isPurchasesAvailable() && onUpgradeClick;
+  const showUpgrade = tier === 'free' && onUpgradeClick;
 
   return (
     <header className="flex items-center justify-between py-6">
@@ -40,7 +39,7 @@ export function Header({ displayName, onSettingsClick, onHistoryClick, onActions
             </span>
           </div>
 
-          {/* Upgrade Button - show for free tier on native platforms */}
+          {/* Upgrade Button - show for free tier users */}
           {showUpgrade && (
             <button
               onClick={onUpgradeClick}

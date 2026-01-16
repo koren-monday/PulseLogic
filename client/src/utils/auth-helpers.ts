@@ -1,7 +1,6 @@
 import { clearAllAuthData } from './storage';
 import { clearAllData } from '../services/storage.service';
 import { firebaseSignOut } from '../config/firebase';
-import { logoutFromPurchases } from '../services/purchases';
 import { logoutFromGarmin } from '../services/api';
 
 /**
@@ -41,9 +40,6 @@ export async function performLogout(): Promise<void> {
   const remoteCleanup = Promise.all([
     withTimeout(firebaseSignOut(), 3000).catch((error) => {
       console.warn('Firebase sign out failed or timed out:', error);
-    }),
-    withTimeout(logoutFromPurchases(), 3000).catch((error) => {
-      console.warn('RevenueCat logout failed or timed out:', error);
     }),
     withTimeout(logoutFromGarmin(false), 3000).catch((error) => {
       console.warn('Garmin logout failed or timed out:', error);

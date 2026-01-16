@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { App as CapacitorApp } from '@capacitor/app';
-import { Capacitor } from '@capacitor/core';
 import { Activity } from 'lucide-react';
 import { Header } from './components/Header';
 import { SettingsModal } from './components/SettingsModal';
@@ -23,7 +21,6 @@ import {
   type UserSettings,
 } from './utils/storage';
 import { syncOnLogin, syncReportsAndActionsOnLogin } from './services/sync.service';
-import { loginToPurchases } from './services/purchases';
 import { performLogout, validateSessionWithServer } from './utils/auth-helpers';
 import { AUTH_ERROR_EVENT, restoreGarminSession } from './services/api';
 import { signInWithToken } from './config/firebase';
@@ -113,12 +110,6 @@ function App() {
             setUserId(storedUserId);
             setDisplayName(session.displayName || storedUserId);
 
-            // Login to RevenueCat
-            console.log('[App] Logging in to RevenueCat...');
-            loginToPurchases(storedUserId).catch(err => {
-              console.error('[App] RevenueCat login failed:', err);
-            });
-
             // Sync user data from cloud (life contexts, etc.)
             console.log('[App] Syncing user data from cloud...');
             const syncedSettings = await syncOnLogin(storedUserId);
@@ -149,60 +140,11 @@ function App() {
     validateAndRestoreSession();
   }, []);
 
-  // Handle Android back button
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-
-    const handler = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-      // Close modals first
-      if (showPaywall) {
-        setShowPaywall(false);
-        return;
-      }
-      if (showSettings) {
-        setShowSettings(false);
-        return;
-      }
-      if (showSnapshot) {
-        setShowSnapshot(false);
-        return;
-      }
-      if (viewingReport) {
-        setViewingReport(null);
-        return;
-      }
-
-      // Navigate within app
-      if (currentStep !== 'data') {
-        setCurrentStep('data');
-        setHealthData(null);
-        return;
-      }
-
-      // At root - use browser history or exit
-      if (canGoBack) {
-        window.history.back();
-      } else {
-        CapacitorApp.exitApp();
-      }
-    });
-
-    return () => {
-      handler.then(h => h.remove());
-    };
-  }, [currentStep, showPaywall, showSettings, showSnapshot, viewingReport]);
-
   const handleLoginSuccess = async (newUserId: string, newDisplayName: string) => {
     console.log('[App] Login success:', { userId: newUserId, displayName: newDisplayName });
     setUserId(newUserId);
     setDisplayName(newDisplayName);
     storeCurrentUserId(newUserId);
-
-    // Login to RevenueCat with the userId (Firebase UID or email)
-    console.log('[App] Logging in to RevenueCat...');
-    loginToPurchases(newUserId).catch(err => {
-      console.error('[App] RevenueCat login failed:', err);
-    });
 
     // Sync with cloud (only life contexts now - no API key settings)
     console.log('[App] Syncing user data from cloud...');
